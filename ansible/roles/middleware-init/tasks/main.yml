@@ -1,0 +1,12 @@
+---
+
+- hosts: asl-cnc
+  gather_facts: true
+
+  tasks:
+  - name: Installing middleware packages (Ubuntu)
+    apt:
+     name: "openjdk-8-jdk-headless"
+     update_cache: yes
+     state: present
+    become: true
