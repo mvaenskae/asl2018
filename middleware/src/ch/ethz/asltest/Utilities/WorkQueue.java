@@ -1,16 +1,18 @@
 package ch.ethz.asltest.Utilities;
 
+import ch.ethz.asltest.Utilities.WorkUnit.WorkUnit;
+
 import java.util.concurrent.ArrayBlockingQueue;
 
 public class WorkQueue {
-    public ArrayBlockingQueue<WorkUnit> workUnits;
+    private final ArrayBlockingQueue<WorkUnit> workUnits;
 
     public WorkQueue(int size) {
         this.workUnits = new ArrayBlockingQueue<>(size);
     }
 
-    private ArrayBlockingQueue<WorkUnit> getList() {
-        return this.workUnits;
+    public int getSize() {
+        return this.workUnits.size();
     }
 
     public WorkUnit get() throws InterruptedException {

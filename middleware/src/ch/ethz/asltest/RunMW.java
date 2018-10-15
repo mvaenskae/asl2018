@@ -12,7 +12,7 @@ public class RunMW {
 	private static int numThreadsPTP = -1;
 	private static boolean readSharded = false;
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) {
 
 		// -----------------------------------------------------------------------------
 		// Parse and prepare arguments

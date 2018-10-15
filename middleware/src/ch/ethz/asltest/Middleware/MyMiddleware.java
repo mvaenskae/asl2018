@@ -2,9 +2,6 @@ package ch.ethz.asltest.Middleware;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.nio.*;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.io.IOException;
@@ -13,6 +10,8 @@ import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import ch.ethz.asltest.Utilities.Misc.IPPair;
+import ch.ethz.asltest.Utilities.WorkUnit.WorkUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -21,17 +20,17 @@ import ch.ethz.asltest.Utilities.*;
 
 public class MyMiddleware implements Runnable {
     // Consts
-    private final static int CLIENT_QUEUE_SIZE = 100000;
+    private final static int CLIENT_QUEUE_SIZE = 1000;
     private final static int MAXIMUM_THREADS = 128;
 
     // Local objects
-    private static Logger logger = LogManager.getLogger(MyMiddleware.class.getName());
+    private static final Logger logger = LogManager.getLogger(MyMiddleware.class.getName());
 
     // Local fields
-    public AtomicBoolean atomicStopFlag = new AtomicBoolean(false);
+    public final AtomicBoolean atomicStopFlag = new AtomicBoolean(false);
     final private InetAddress ip;
     final private int port;
-    final private List<InetAddress> memcachedServers;
+    final private List<InetSocketAddress> memcachedServers;
     final private int numThreadPoolThreads;
     final private boolean isShardedRead;
 
@@ -40,7 +39,7 @@ public class MyMiddleware implements Runnable {
 
     private Selector selector;
     private ServerSocketChannel serverChannel;
-    private List<Future<Object>> workTaskResult;
+    private ArrayList<Future<Object>> workerResults;
 
 
     /**
@@ -63,13 +62,8 @@ public class MyMiddleware implements Runnable {
         this.port = port;
         this.memcachedServers = new ArrayList<>(memcachedServers.size());
         for (String server: memcachedServers) {
-            try {
-                this.memcachedServers.add(InetAddress.getByName(server));
-            } catch (UnknownHostException e) {
-                logger.error("Memcached server IP Address malformatted. Stopping now.");
-                e.printStackTrace();
-                throw e;
-            }
+            IPPair temp = IPPair.getIPPair(server);
+            this.memcachedServers.add(new InetSocketAddress(temp.ip, temp.port));
         }
 
         this.numThreadPoolThreads = numThreadPoolThreads < MAXIMUM_THREADS ? numThreadPoolThreads : MAXIMUM_THREADS;
@@ -83,14 +77,11 @@ public class MyMiddleware implements Runnable {
     public void run() {
         try {
             initNioMiddleware();
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             logger.error("Initialization of middleware failed. Stopping now.");
             e.printStackTrace();
             System.exit(-3);
         }
-
-        // TODO: Make this part of each packetParser...
-        ByteBuffer buffer = ByteBuffer.allocate(8192);
 
         // Main logic for server to accept new channels and process them with a packet parser before pushing them onto
         // the queue
@@ -108,9 +99,11 @@ public class MyMiddleware implements Runnable {
                     }
 
                     if (key.isReadable()) {
-                        WorkUnit parsedPacket = parsePacket(buffer, key);
-                        if (parsedPacket != null) {
-                            this.clientQueue.put(parsedPacket);
+                        List<WorkUnit> completeRequest = ((PacketParser) key.attachment()).receiveAndParse(key);
+                        if (completeRequest != null) {
+                            for (WorkUnit wu : completeRequest) {
+                                this.clientQueue.put(wu);
+                            }
                         }
                     }
                     iter.remove();
@@ -129,7 +122,7 @@ public class MyMiddleware implements Runnable {
 
         // Wait until the queue is empty
         while(!this.clientQueue.isEmpty()) {
-            // TODO: Busyspin here
+            // Busyspin here
         }
 
         // Shut down the threadpool
@@ -145,7 +138,7 @@ public class MyMiddleware implements Runnable {
 
         // Get results from each thread and generate final results
         for (Future<Object> workResult:
-             this.workTaskResult) {
+             this.workerResults) {
             // TODO: Merge results from threads here
         }
 
@@ -157,7 +150,7 @@ public class MyMiddleware implements Runnable {
      * this channel is attached.
      * @param selector Selector on which to register the channel on.
      * @param serverSocket Socket from which to expect clients to start talking.
-     * @throws IOException
+     * @throws IOException Socket wasn't able to be connected to or client couldn't be registered to selector.
      */
     private static void register(Selector selector, ServerSocketChannel serverSocket) throws IOException {
         SocketChannel client = serverSocket.accept();
@@ -166,53 +159,11 @@ public class MyMiddleware implements Runnable {
         client.register(selector, SelectionKey.OP_READ, new PacketParser());
     }
 
-    /**
-     * Method to call the packet parser after accepting locally as many bytes as the channel has to offer.
-     * @param buffer
-     * @param key SelectionKey on which to operate on
-     * @return
-     * @throws IOException
-     */
-    private static WorkUnit parsePacket(ByteBuffer buffer, SelectionKey key) throws IOException {
-        // TODO: FIX ME!
-        SocketChannel client = (SocketChannel) key.channel();
-
-        boolean headerFinished = false;
-        boolean bodyFinished = false;
-        int bodySize = 0;
-        byte[] body = null;
-
-        int bufferSize = 0;
-
-        while (!headerFinished) {
-            bufferSize = client.read(buffer);
-            for (int i = 0; i < bufferSize; ++i) {
-                // TODO: Rudimentary parsing here...
-            }
-        }
-
-        body = new byte[bodySize+2];
-        int bodyOffset = 0;
-        bufferSize = 0;
-
-        while (!bodyFinished) {
-            bufferSize = client.read(buffer);
-            for (int i = 0; i < bufferSize; ++i) {
-                body[i+bodyOffset] = buffer.get(i);
-            }
-            bodyOffset = bodyOffset + bufferSize + 1;
-            if (bodyOffset == (bodySize + 1)) {
-                bodyFinished = true;
-            }
-        }
-
-        return null;
-    }
 
     /**
      * Initialize the middleware's networking layer based on Java NIO (sockets bound, no services running).
      */
-    private void initNioMiddleware() throws IOException, InterruptedException {
+    private void initNioMiddleware() throws IOException {
         this.selector = Selector.open();
         this.serverChannel = ServerSocketChannel.open();
         try {
@@ -228,23 +179,17 @@ public class MyMiddleware implements Runnable {
         // Initialize datastructures once the middleware is up
         this.clientQueue = new WorkQueue(CLIENT_QUEUE_SIZE);
 
-        WorkTask.setWorkQueue(this.clientQueue);
-        WorkTask.setMemcachedServers(this.memcachedServers);
-        WorkTask.setIsSharded(this.isShardedRead);
-
-        Collection<Callable<Object>> workTasks = new ArrayList<>(this.numThreadPoolThreads);
-        for (int i = 0; i < this.numThreadPoolThreads; i++) {
-            workTasks.add(new WorkTask());
-        }
+        Worker.setWorkQueue(this.clientQueue);
+        Worker.setMemcachedServers(this.memcachedServers);
+        Worker.setIsSharded(this.isShardedRead);
 
         this.workerThreads = Executors.newFixedThreadPool(this.numThreadPoolThreads);
-        try {
-            this.workTaskResult = workerThreads.invokeAll(workTasks);
-        } catch (InterruptedException e) {
-            logger.error("Couldn't start up threads. Stopping middleware.");
-            this.serverChannel.close();
-            e.printStackTrace();
-            throw e;
+        Collection<Callable<Object>> workers = new ArrayList<>(this.numThreadPoolThreads);
+        this.workerResults = new ArrayList<>(this.numThreadPoolThreads);
+        for (int i = 0; i < this.numThreadPoolThreads; i++) {
+            Worker temp = new Worker();
+            workers.add(temp);
+            this.workerResults.add(this.workerThreads.submit(temp));
         }
     }
 }

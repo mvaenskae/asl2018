@@ -1,0 +1,23 @@
+package ch.ethz.asltest.Utilities.WorkUnit;
+
+import java.nio.channels.SocketChannel;
+
+public class WorkUnitClientError extends WorkUnit {
+    /**
+     * CLIENT_ERROR: Error in the input line of the command.
+     *
+     * CLIENT_ERROR <error>\r\n
+     *
+     * <error> Human-readable error string
+     */
+
+    public final byte[] header;
+
+    public WorkUnitClientError(SocketChannel originalSocket, byte[] header)
+    {
+        super(originalSocket);
+        this.type = WorkUnitType.CLIENT_ERROR;
+        this.header = header;
+        this.readyForUsage = true;
+    }
+}
