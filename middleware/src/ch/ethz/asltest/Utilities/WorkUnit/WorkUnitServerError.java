@@ -2,12 +2,12 @@ package ch.ethz.asltest.Utilities.WorkUnit;
 
 import java.nio.channels.SocketChannel;
 
-public class WorkUnitServerError extends WorkUnit {
+public final class WorkUnitServerError extends WorkUnit {
     /**
      * SERVER_ERROR: Error on the side of the server. Fatal errors will result in disconnects carried out by the server!
-     *
+     * <p></p>
      * SERVER_ERROR <error>\r\n
-     *
+     * <p></p>
      * <error> Human-readable error string
      */
 

@@ -2,7 +2,7 @@ package ch.ethz.asltest.Utilities.WorkUnit;
 
 import java.nio.channels.SocketChannel;
 
-public class WorkUnitInvalid extends WorkUnit {
+public final class WorkUnitInvalid extends WorkUnit {
 
     public WorkUnitInvalid(SocketChannel originalSocket)
     {

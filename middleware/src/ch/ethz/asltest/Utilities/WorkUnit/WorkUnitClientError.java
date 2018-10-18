@@ -2,12 +2,12 @@ package ch.ethz.asltest.Utilities.WorkUnit;
 
 import java.nio.channels.SocketChannel;
 
-public class WorkUnitClientError extends WorkUnit {
+public final class WorkUnitClientError extends WorkUnit {
     /**
      * CLIENT_ERROR: Error in the input line of the command.
-     *
+     * <p></p>
      * CLIENT_ERROR <error>\r\n
-     *
+     * <p></p>
      * <error> Human-readable error string
      */
 

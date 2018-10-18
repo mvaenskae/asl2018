@@ -1,8 +1,9 @@
-package ch.ethz.asltest.Middleware;
+package ch.ethz.asltest.Memcached;
 
 import ch.ethz.asltest.Utilities.WorkQueue;
 import ch.ethz.asltest.Utilities.WorkUnit.WorkUnit;
-
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -14,17 +15,18 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Worker implements Callable<Object> {
+public final class Worker implements Callable<Object> {
 
-    // Poison-Pill
+    // Static fields shared by all workers
     private final static AtomicBoolean stopFlag = new AtomicBoolean();
-
-    // Static fields
     private static WorkQueue workQueue;
     private static List<InetSocketAddress> memcachedServers;
     private static boolean isSharded;
 
     // Instance-based fields
+    private final Logger logger;
+    private final int id;
+
     // Initialized by static properties
     private final List<SocketChannel> memcachedSockets = new ArrayList<>(memcachedServers.size());
     private final List<SelectionKey> selectionKeys = new ArrayList<>(memcachedServers.size());
@@ -37,23 +39,27 @@ public class Worker implements Callable<Object> {
 
     /**
      * Sets the workQueue statically which instances are referring to.
+     *
      * @param queue workQueue to be used by instances.
      */
-    static void setWorkQueue(WorkQueue queue)
+    public static void setWorkQueue(WorkQueue queue)
     {
         Worker.workQueue = queue;
     }
 
     /**
      * Sets the list of Memcached-servers each instance is connecting to.
+     *
      * @param memcachedServers List of Memcached-servers used by instances.
      */
-    public static void setMemcachedServers(List<InetSocketAddress> memcachedServers) {
+    public static void setMemcachedServers(List<InetSocketAddress> memcachedServers)
+    {
         Worker.memcachedServers = memcachedServers;
     }
 
     /**
      * Sets the GET requests as sharded for each instance of this class.
+     *
      * @param isSharded Set the GET reuqests as sharded.
      */
     public static void setIsSharded(boolean isSharded)
@@ -64,21 +70,24 @@ public class Worker implements Callable<Object> {
     /**
      * Empty instantiation procedure, currently does nothing really...
      */
-    public Worker() {
-
+    public Worker(final int i)
+    {
+        this.id = i;
+        this.logger = LogManager.getLogger(Worker.class + "-" + i);
     }
 
     @Override
-    public Object call() throws InterruptedException, IOException {
+    public Object call() throws InterruptedException, IOException
+    {
         try {
             this.initWorkTask();
         } catch (Exception e) {
-            // TODO: Log this problem...
-            e.printStackTrace();
+            this.logger.fatal("Couldn't initialize worker. Will stop execution on it...");
+            this.logger.error(e.getMessage());
             return null;
         }
 
-        while(!stopFlag.get()) {
+        while (!stopFlag.get()) {
             // TODO: Local logic which works through the queue
             this.workItem = Worker.workQueue.get();
             switch (this.workItem.type) {
@@ -123,20 +132,23 @@ public class Worker implements Callable<Object> {
     /**
      * Initializes each Worker, i.e. connects to each Memcached-server
      */
-    private void initWorkTask() throws IOException {
+    private void initWorkTask() throws IOException
+    {
         this.selector = Selector.open();
-        int interestSet = SelectionKey.OP_CONNECT | SelectionKey.OP_WRITE | SelectionKey.OP_READ;
+        SocketChannel sc_temp;
+        SelectionKey sk_temp;
+        int interestSet = SelectionKey.OP_WRITE | SelectionKey.OP_READ;
         for (int i = 0; i < Worker.memcachedServers.size(); ++i) {
-            SocketChannel temp = SocketChannel.open(Worker.memcachedServers.get(i));
-            temp.configureBlocking(false);
-            while (!temp.finishConnect()) {
+            sc_temp = SocketChannel.open(Worker.memcachedServers.get(i));
+            sc_temp.configureBlocking(false);
+            while (!sc_temp.finishConnect()) {
                 // Busy-spin until connected...
             }
-            SelectionKey temp2 = temp.register(this.selector, interestSet);
-            this.selectionKeys.add(temp2);
-            this.memcachedSockets.add(temp);
-            System.out.printf("Thread %d connected to server %s\n", Thread.currentThread().getId(),
-                                                                    Worker.memcachedServers.get(i).toString());
+            sk_temp = sc_temp.register(this.selector, interestSet);
+            this.selectionKeys.add(sk_temp);
+            this.memcachedSockets.add(sc_temp);
+            this.logger.info("Thread %d connected to server %s\n", this.id,
+                    Worker.memcachedServers.get(i).toString());
         }
     }
 }

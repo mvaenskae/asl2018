@@ -1,10 +1,10 @@
 package ch.ethz.asltest.Utilities.Misc;
 
-public class IPPair {
+public final class IPPair {
     public final String ip;
     public final int port;
 
-    public IPPair (String ip, int port)
+    public IPPair(String ip, int port)
     {
         this.ip = ip;
         this.port = port;

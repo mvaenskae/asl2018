@@ -4,13 +4,13 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 
-public class WorkUnitValue extends WorkUnit {
+public final class WorkUnitValue extends WorkUnit {
     /**
      * VALUE: Expected reply for each <key> in GET.
-     *
+     * <p></p>
      * VALUE <key> <flags> <bytes> [<cas_unique>]\r\n
      * <data block>\r\n
-     *
+     * <p></p>
      * <key> Maximum size of 250 Bytes
      * <flags> Either 16 or 32 bits (use 16 here for legacy)
      * <bytes> Gives length of payload EXCLUDING \r\n (so 2 more Bytes here!)
@@ -26,7 +26,8 @@ public class WorkUnitValue extends WorkUnit {
 
     public final List<Integer> whitespaces;
 
-    public WorkUnitValue(SocketChannel client, byte[] header, ArrayList<byte[]> contents, ArrayList<Integer> whitespace) {
+    public WorkUnitValue(SocketChannel client, byte[] header, ArrayList<byte[]> contents, ArrayList<Integer> whitespace)
+    {
         super(client);
         this.type = WorkUnitType.VALUE;
         this.header = header;
@@ -36,7 +37,8 @@ public class WorkUnitValue extends WorkUnit {
         this.whitespaces = whitespace;
     }
 
-    public void setBody(byte[] body) {
+    public void setBody(byte[] body)
+    {
         this.body = body;
         this.readyForUsage = true;
     }

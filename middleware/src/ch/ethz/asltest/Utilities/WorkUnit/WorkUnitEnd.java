@@ -2,19 +2,19 @@ package ch.ethz.asltest.Utilities.WorkUnit;
 
 import java.nio.channels.SocketChannel;
 
-public final class WorkUnitStored extends WorkUnit {
+public final class WorkUnitEnd extends WorkUnit {
     /**
-     * STORED: Expected reply to a SET command.
+     * END: Expected final reply to a get(s) command.
      * <p></p>
-     * STORED\r\n
+     * END\r\n
      */
 
     public final byte[] header;
 
-    public WorkUnitStored(SocketChannel originalSocket, byte[] header)
+    public WorkUnitEnd(SocketChannel originalSocket, byte[] header)
     {
         super(originalSocket);
-        this.type = WorkUnitType.STORED;
+        this.type = WorkUnitType.END;
         this.header = header;
         this.readyForUsage = true;
     }

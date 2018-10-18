@@ -2,6 +2,8 @@ package ch.ethz.asltest.Utilities;
 
 import ch.ethz.asltest.Utilities.Misc.Tuple;
 import ch.ethz.asltest.Utilities.WorkUnit.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -11,36 +13,70 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class PacketParser {
+public final class PacketParser {
     /**
      * This class holds helper functions to correctly parse an incoming packet from memtier, designated for memcached.
      * It is able to interpret packets of operations GET, GETS and SET with arbitrary size keys.
      */
 
+    /**
+     * Static fields which hold shared data
+     **/
+    private static byte[] getHeader = "get".getBytes();
+    private static byte[] getsHeader = "gets".getBytes();
+    private static final byte[] valueHeader = "VALUE".getBytes();
+    private static final byte[] endHeader = "END".getBytes();
+    private static final byte[] setHeader = "set".getBytes();
+    private static byte[] storedHeader = "STORED".getBytes();
+    private static byte[] errorHeader = "ERROR".getBytes();
+    private static final byte[] clientErrorHeader = "CLIENT_ERROR".getBytes();
+    private static final byte[] serverErrorHeader = "SERVER_ERROR".getBytes();
+
+    private static byte[] getHeaderParsing = "get ".getBytes();
+    private static byte[] getsHeaderParsing = "gets ".getBytes();
+    private static final byte[] valueHeaderParsing = "VALUE ".getBytes();
+    private static final byte[] endHeaderParsing = "END".getBytes();
+    private static final byte[] setHeaderParsing = "set ".getBytes();
+    private static byte[] storedHeaderParsing = "STORED\r\n".getBytes();
+    private static byte[] errorHeaderParsing = "ERROR\r\n".getBytes();
+    private static final byte[] clientErrorHeaderParsing = "CLIENT_ERROR ".getBytes();
+    private static final byte[] serverErrorHeaderParsing = "SERVER_ERROR ".getBytes();
+
+    /**
+     * Internal buffer with respective metadata to generate byte[] from it
+     **/
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(8192);
     private int bufferOffset;
     private int headerOffset;
     private int bodySize;
     private int bodyBufferedSize;
+
+    /**
+     * Reference fields which hold parsed results, used to create new WorkUnits
+     **/
     private byte[] errorString;
     private byte[] header;
     private byte[] body;
+    private WorkUnit workUnit;
 
+    /**
+     * Internal state of each PacketParser, need to be reset upon successfully parsing a new packet
+     **/
     private LineParsingState lineState = LineParsingState.READING;
     private boolean headerFound = false;
     private boolean headerParsed = false;
     private boolean hasBody = false;
 
-    private WorkUnit workUnit;
+    /**
+     * Private helper objects
+     **/
+    private final Logger logger;
     private SocketChannel client;
 
-    // private static byte[] getHeader = "get".getBytes();
-    private static final byte[] valueHeader = "VALUE".getBytes();
-    private static final byte[] setHeader = "set".getBytes();
-    // private static byte[] storedHeader = "STORED".getBytes();
-    // private static byte[] errorHeader = "ERROR".getBytes();
-    private static final byte[] clientErrorHeader = "CLIENT_ERROR".getBytes();
-    private static final byte[] serverErrorHeader = "SERVER_ERROR".getBytes();
+    public PacketParser(String loggerName)
+    {
+        this.logger = LogManager.getLogger(PacketParser.class.getName());
+    }
 
     public List<WorkUnit> receiveAndParse(SelectionKey key)
     {
@@ -111,7 +147,8 @@ public class PacketParser {
     /**
      * Internal method which statefully saves the body of the request.
      */
-    private void setBody() {
+    private void setBody()
+    {
         this.bodyBufferedSize = this.bufferOffset - this.headerOffset;
         if (this.bodyBufferedSize == this.bodySize + 2) {
             this.body = new byte[this.bodySize + 2];
@@ -150,6 +187,7 @@ public class PacketParser {
 
         this.workUnit = null;
         this.client = null;
+
     }
 
     /**
@@ -158,26 +196,41 @@ public class PacketParser {
      */
     private void parseHeader()
     {
-        if ((this.header[0] == 'g' && this.header[1] == 'e' && this.header[2] == 't') &&
-                ((this.header[3] == 's' && this.header[4] == ' ') || this.header[3] == ' ')) {
-            this.parseGetHeader(this.header[3] == ' ' ? 4 : 5);
-        } else if (this.header[0] == 's' && this.header[1] == 'e' && this.header[2] == 't' && this.header[3] == ' ') {
+        if ((this.header.length > PacketParser.getHeaderParsing.length - 1 &&
+                this.header[0] == 'g' && this.header[1] == 'e' && this.header[2] == 't') &&
+                (this.header[3] == ' ' ||
+                        (this.header.length > PacketParser.getsHeaderParsing.length - 1 &&
+                                this.header[3] == 's' && this.header[4] == ' '))) {
+            this.parseGetHeader(this.header[PacketParser.getHeaderParsing.length - 1] == ' ' ?
+                    PacketParser.getHeaderParsing.length :
+                    PacketParser.getsHeaderParsing.length);
+        } else if (this.header.length > PacketParser.setHeaderParsing.length - 1 &&
+                this.header[0] == 's' && this.header[1] == 'e' && this.header[2] == 't' && this.header[3] == ' ') {
             this.parseSetHeader();
-        } else if (this.header[0] == 'V' && this.header[1] == 'A' && this.header[2] == 'L' && this.header[3] == 'U' &&
+        } else if (this.header.length > PacketParser.valueHeaderParsing.length - 1 &&
+                this.header[0] == 'V' && this.header[1] == 'A' && this.header[2] == 'L' && this.header[3] == 'U' &&
                 this.header[4] == 'E' && this.header[5] == ' ') {
             this.parseValueHeader();
-        } else if (this.header[0] == 'S' && this.header[1] == 'T' && this.header[2] == 'O' && this.header[3] == 'R' &&
+        } else if (this.header.length > PacketParser.endHeaderParsing.length - 1 &&
+                this.header[0] == 'E' && this.header[1] == 'N' && this.header[2] == 'D' && this.header[3] == '\r' &&
+                this.header[4] == '\n') {
+            this.parseEndHeader();
+        } else if (this.header.length > PacketParser.storedHeaderParsing.length - 1 &&
+                this.header[0] == 'S' && this.header[1] == 'T' && this.header[2] == 'O' && this.header[3] == 'R' &&
                 this.header[4] == 'E' && this.header[5] == 'D' && this.header[6] == '\r' && this.header[7] == '\n') {
             this.parseStoredHeader();
-        } else if (this.header[0] == 'E' && this.header[1] == 'R' && this.header[2] == 'R' && this.header[3] == 'O' &&
+        } else if (this.header.length > PacketParser.errorHeaderParsing.length - 1 &&
+                this.header[0] == 'E' && this.header[1] == 'R' && this.header[2] == 'R' && this.header[3] == 'O' &&
                 this.header[4] == 'R' && this.header[5] == '\r' && this.header[6] == '\n') {
             this.parseErrorHeader();
-        } else if (this.header[0] == 'C' && this.header[1] == 'L' && this.header[2] == 'I' && this.header[3] == 'E' &&
+        } else if (this.header.length > PacketParser.clientErrorHeaderParsing.length - 1 &&
+                this.header[0] == 'C' && this.header[1] == 'L' && this.header[2] == 'I' && this.header[3] == 'E' &&
                 this.header[4] == 'N' && this.header[5] == 'T' && this.header[6] == '_' && this.header[7] == 'E' &&
                 this.header[8] == 'R' && this.header[9] == 'R' && this.header[10] == 'O' && this.header[11] == 'R' &&
                 this.header[12] == ' ') {
             this.parseClientErrorHeader();
-        } else if (this.header[0] == 'S' && this.header[1] == 'E' && this.header[2] == 'R' && this.header[3] == 'V' &&
+        } else if (this.header.length > PacketParser.serverErrorHeaderParsing.length - 1 &&
+                this.header[0] == 'S' && this.header[1] == 'E' && this.header[2] == 'R' && this.header[3] == 'V' &&
                 this.header[4] == 'E' && this.header[5] == 'R' && this.header[6] == '_' && this.header[7] == 'E' &&
                 this.header[8] == 'R' && this.header[9] == 'R' && this.header[10] == 'O' && this.header[11] == 'R' &&
                 this.header[12] == ' ') {
@@ -200,6 +253,7 @@ public class PacketParser {
 
     /**
      * Generic header parser which is used to parse whitespace separated fields from a starting offset.
+     *
      * @param startOffset: Offset from which to start parsing the header
      */
     private Tuple<ArrayList<Integer>, ArrayList<byte[]>> parseHeaderGeneric(final int startOffset)
@@ -218,11 +272,12 @@ public class PacketParser {
                 lastSpace = i + 1;
             }
         }
-        return new Tuple(whitespaces, contents);
+        return new Tuple<>(whitespaces, contents);
     }
 
     /**
      * Parses a GET(S) statefully for this instance.
+     *
      * @param startOffset Offset where the first field starts in the buffer.
      */
     private void parseGetHeader(int startOffset)
@@ -244,7 +299,7 @@ public class PacketParser {
         this.hasBody = true;
         ArrayList<Integer> whitespace;
         ArrayList<byte[]> contents;
-        Tuple<ArrayList<Integer>, ArrayList<byte[]>> result = this.parseHeaderGeneric(PacketParser.setHeader.length + 1);
+        Tuple<ArrayList<Integer>, ArrayList<byte[]>> result = this.parseHeaderGeneric(PacketParser.setHeaderParsing.length);
         whitespace = result.first;
         contents = result.second;
 
@@ -252,12 +307,15 @@ public class PacketParser {
         this.bodySize = ((WorkUnitSet) this.workUnit).bytes;
     }
 
+    /**
+     * Parses a VALUE statefully for this instance.
+     */
     private void parseValueHeader()
     {
         this.hasBody = true;
         ArrayList<Integer> whitespace;
         ArrayList<byte[]> contents;
-        Tuple<ArrayList<Integer>, ArrayList<byte[]>> result = this.parseHeaderGeneric(PacketParser.valueHeader.length + 1);
+        Tuple<ArrayList<Integer>, ArrayList<byte[]>> result = this.parseHeaderGeneric(PacketParser.valueHeaderParsing.length);
         whitespace = result.first;
         contents = result.second;
 
@@ -270,7 +328,7 @@ public class PacketParser {
      */
     private void parseClientErrorHeader()
     {
-        int errorLength = this.headerOffset - 2 - PacketParser.clientErrorHeader.length - 2; // -2 due to "\r\n"
+        int errorLength = this.headerOffset - 2 - PacketParser.clientErrorHeaderParsing.length;
         this.errorString = new byte[errorLength];
         this.buffer.get(this.errorString, PacketParser.clientErrorHeader.length, errorLength);
 
@@ -282,7 +340,7 @@ public class PacketParser {
      */
     private void parseServerErrorHeader()
     {
-        int errorLength = this.headerOffset - 2 - PacketParser.serverErrorHeader.length - 2; // -2 due to "\r\n"
+        int errorLength = this.headerOffset - 2 - PacketParser.serverErrorHeaderParsing.length;
         this.errorString = new byte[errorLength];
         this.buffer.get(this.errorString, PacketParser.serverErrorHeader.length, errorLength);
 
@@ -303,6 +361,14 @@ public class PacketParser {
     private void parseStoredHeader()
     {
         this.workUnit = new WorkUnitStored(this.client, header);
+    }
+
+    /**
+     * Parses a END statefully for this instance.
+     */
+    private void parseEndHeader()
+    {
+        this.workUnit = new WorkUnitEnd(this.client, header);
     }
 
     private enum LineParsingState {

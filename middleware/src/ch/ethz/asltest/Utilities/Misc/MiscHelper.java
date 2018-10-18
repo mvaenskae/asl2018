@@ -2,7 +2,7 @@ package ch.ethz.asltest.Utilities.Misc;
 
 import java.nio.ByteBuffer;
 
-public class MiscHelper {
+public final class MiscHelper {
 
     public static long getLongFromByteArray(byte[] bytes)
     {

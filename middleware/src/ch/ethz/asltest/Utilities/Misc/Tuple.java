@@ -1,6 +1,6 @@
 package ch.ethz.asltest.Utilities.Misc;
 
-public class Tuple<T, T1> {
+public final class Tuple<T, T1> {
     public final T first;
     public final T1 second;
 

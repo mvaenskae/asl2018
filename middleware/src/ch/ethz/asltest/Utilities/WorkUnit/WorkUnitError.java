@@ -2,10 +2,10 @@ package ch.ethz.asltest.Utilities.WorkUnit;
 
 import java.nio.channels.SocketChannel;
 
-public class WorkUnitError extends WorkUnit {
+public final class WorkUnitError extends WorkUnit {
     /**
      * ERROR: Means the client sent a nonexistent command name.
-     *
+     * <p></p>
      * ERROR\r\n
      */
 

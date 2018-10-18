@@ -4,13 +4,13 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 
-public class WorkUnitGet extends WorkUnit {
+public final class WorkUnitGet extends WorkUnit {
     /**
      * GET: GET the value of the specific key(s).
-     *
+     * <p></p>
      * get <key>{1,10}\r\n
      * gets <key>{1,10}\r\n
-     *
+     * <p></p>
      * Delimited by whitespace
      */
 

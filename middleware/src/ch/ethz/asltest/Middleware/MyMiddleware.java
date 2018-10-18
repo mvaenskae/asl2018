@@ -1,30 +1,34 @@
 package ch.ethz.asltest.Middleware;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.channels.*;
-import java.util.*;
-import java.util.concurrent.*;
-
+import ch.ethz.asltest.Memcached.Worker;
 import ch.ethz.asltest.Utilities.Misc.IPPair;
+import ch.ethz.asltest.Utilities.PacketParser;
+import ch.ethz.asltest.Utilities.WorkQueue;
 import ch.ethz.asltest.Utilities.WorkUnit.WorkUnit;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import ch.ethz.asltest.Utilities.*;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
-public class MyMiddleware implements Runnable {
+public final class MyMiddleware implements Runnable {
+
     // Consts
     private final static int CLIENT_QUEUE_SIZE = 1000;
     private final static int MAXIMUM_THREADS = 128;
 
     // Local objects
-    private static final Logger logger = LogManager.getLogger(MyMiddleware.class.getName());
+    private static final Logger logger = LogManager.getLogger(MyMiddleware.class);
 
     // Local fields
     public final AtomicBoolean atomicStopFlag = new AtomicBoolean(false);
@@ -44,13 +48,15 @@ public class MyMiddleware implements Runnable {
 
     /**
      * Constructor for middleware
-     * @param ip IP of middleware
-     * @param port Port on which middleware listens
-     * @param memcachedServers IP:Port of servers running memcached
+     *
+     * @param ip                   IP of middleware
+     * @param port                 Port on which middleware listens
+     * @param memcachedServers     IP:Port of servers running memcached
      * @param numThreadPoolThreads Threads within a single Threadpool
-     * @param isShardedRead Sharded reads supported?
+     * @param isShardedRead        Sharded reads supported?
      */
-    public MyMiddleware(String ip, int port, List<String> memcachedServers, int numThreadPoolThreads, boolean isShardedRead) throws UnknownHostException {
+    public MyMiddleware(String ip, int port, List<String> memcachedServers, int numThreadPoolThreads, boolean isShardedRead) throws UnknownHostException
+    {
         try {
             this.ip = InetAddress.getByName(ip);
         } catch (UnknownHostException e) {
@@ -61,7 +67,7 @@ public class MyMiddleware implements Runnable {
 
         this.port = port;
         this.memcachedServers = new ArrayList<>(memcachedServers.size());
-        for (String server: memcachedServers) {
+        for (String server : memcachedServers) {
             IPPair temp = IPPair.getIPPair(server);
             this.memcachedServers.add(new InetSocketAddress(temp.ip, temp.port));
         }
@@ -74,7 +80,8 @@ public class MyMiddleware implements Runnable {
      * Starts the main logic of the middleware, accepts packets and puts them into a queue
      */
     @Override
-    public void run() {
+    public void run()
+    {
         try {
             initNioMiddleware();
         } catch (IOException e) {
@@ -83,9 +90,10 @@ public class MyMiddleware implements Runnable {
             System.exit(-3);
         }
 
+
         // Main logic for server to accept new channels and process them with a packet parser before pushing them onto
         // the queue
-        while(!this.atomicStopFlag.get()) {
+        while (!this.atomicStopFlag.get()) {
             try {
                 this.selector.select();
                 Set<SelectionKey> selectedKeys = this.selector.selectedKeys();
@@ -106,6 +114,10 @@ public class MyMiddleware implements Runnable {
                             }
                         }
                     }
+
+                    /*if (key.isWritable()) {
+                        // TODO: Here the networkThread is supposed to return the reply back via the socket...
+                    }*/
                     iter.remove();
                 }
             } catch (IOException | InterruptedException e) {
@@ -121,7 +133,7 @@ public class MyMiddleware implements Runnable {
         }
 
         // Wait until the queue is empty
-        while(!this.clientQueue.isEmpty()) {
+        while (!this.clientQueue.isEmpty()) {
             // Busyspin here
         }
 
@@ -137,8 +149,8 @@ public class MyMiddleware implements Runnable {
         }
 
         // Get results from each thread and generate final results
-        for (Future<Object> workResult:
-             this.workerResults) {
+        for (Future<Object> workResult :
+                this.workerResults) {
             // TODO: Merge results from threads here
         }
 
@@ -148,22 +160,25 @@ public class MyMiddleware implements Runnable {
     /**
      * Registers the client onto the channel and makes the channel readable. Further a stateful PacketParser related to
      * this channel is attached.
-     * @param selector Selector on which to register the channel on.
+     *
+     * @param selector     Selector on which to register the channel on.
      * @param serverSocket Socket from which to expect clients to start talking.
      * @throws IOException Socket wasn't able to be connected to or client couldn't be registered to selector.
      */
-    private static void register(Selector selector, ServerSocketChannel serverSocket) throws IOException {
+    private static void register(Selector selector, ServerSocketChannel serverSocket) throws IOException
+    {
         SocketChannel client = serverSocket.accept();
         client.configureBlocking(false);
         // TODO: Allocate a buffer here for each packet parser spawned...
-        client.register(selector, SelectionKey.OP_READ, new PacketParser());
+        SelectionKey final register = client.register(selector, SelectionKey.OP_READ, new PacketParser());
     }
 
 
     /**
      * Initialize the middleware's networking layer based on Java NIO (sockets bound, no services running).
      */
-    private void initNioMiddleware() throws IOException {
+    private void initNioMiddleware() throws IOException
+    {
         this.selector = Selector.open();
         this.serverChannel = ServerSocketChannel.open();
         try {
@@ -187,7 +202,7 @@ public class MyMiddleware implements Runnable {
         Collection<Callable<Object>> workers = new ArrayList<>(this.numThreadPoolThreads);
         this.workerResults = new ArrayList<>(this.numThreadPoolThreads);
         for (int i = 0; i < this.numThreadPoolThreads; i++) {
-            Worker temp = new Worker();
+            Worker temp = new Worker(i);
             workers.add(temp);
             this.workerResults.add(this.workerThreads.submit(temp));
         }

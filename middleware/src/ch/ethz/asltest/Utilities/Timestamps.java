@@ -1,6 +1,6 @@
 package ch.ethz.asltest.Utilities;
 
-public class Timestamps {
+public final class Timestamps {
 
     private long arrivedOnSocket;
     private long putOnQueue;
@@ -8,47 +8,58 @@ public class Timestamps {
     private long queryToMemcached;
     private long replyFromMemcached;
 
-    public Timestamps(long ts) {
+    public Timestamps(long ts)
+    {
         arrivedOnSocket = ts;
     }
 
-    public long getArrivedOnSocket() {
+    public long getArrivedOnSocket()
+    {
         return arrivedOnSocket;
     }
 
-    public void setArrivedOnSocket(long arrivedOnSocket) {
+    public void setArrivedOnSocket(long arrivedOnSocket)
+    {
         this.arrivedOnSocket = arrivedOnSocket;
     }
 
-    public long getPutOnQueue() {
+    public long getPutOnQueue()
+    {
         return putOnQueue;
     }
 
-    public void setPutOnQueue(long putOnQueue) {
+    public void setPutOnQueue(long putOnQueue)
+    {
         this.putOnQueue = putOnQueue;
     }
 
-    public long getGotFromQueue() {
+    public long getGotFromQueue()
+    {
         return gotFromQueue;
     }
 
-    public void setGotFromQueue(long gotFromQueue) {
+    public void setGotFromQueue(long gotFromQueue)
+    {
         this.gotFromQueue = gotFromQueue;
     }
 
-    public long getQueryToMemcached() {
+    public long getQueryToMemcached()
+    {
         return queryToMemcached;
     }
 
-    public void setQueryToMemcached(long queryToMemcached) {
+    public void setQueryToMemcached(long queryToMemcached)
+    {
         this.queryToMemcached = queryToMemcached;
     }
 
-    public long getReplyFromMemcached() {
+    public long getReplyFromMemcached()
+    {
         return replyFromMemcached;
     }
 
-    public void setReplyFromMemcached(long replyFromMemcached) {
+    public void setReplyFromMemcached(long replyFromMemcached)
+    {
         this.replyFromMemcached = replyFromMemcached;
     }
 }

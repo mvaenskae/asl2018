@@ -1,10 +1,10 @@
 package ch.ethz.asltest.Utilities.WorkUnit;
 
-import java.nio.channels.SocketChannel;
-
 import ch.ethz.asltest.Utilities.Timestamps;
 
-public class WorkUnit {
+import java.nio.channels.SocketChannel;
+
+public abstract class WorkUnit {
 
     public final Timestamps timestamp;
     public final SocketChannel sendBackTo;
