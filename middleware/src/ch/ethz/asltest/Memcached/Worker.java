@@ -1,6 +1,6 @@
 package ch.ethz.asltest.Memcached;
 
-import ch.ethz.asltest.Utilities.Misc.Tuple;
+import ch.ethz.asltest.Utilities.Misc.MiscHelper;
 import ch.ethz.asltest.Utilities.PacketParser;
 import ch.ethz.asltest.Utilities.WorkQueue;
 import ch.ethz.asltest.Utilities.WorkUnit.*;
@@ -17,6 +17,9 @@ import java.nio.channels.SocketChannel;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static ch.ethz.asltest.Utilities.WorkUnit.WorkUnitType.*;
+import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 public final class Worker implements Callable<Object> {
 
@@ -99,12 +102,10 @@ public final class Worker implements Callable<Object> {
         }
 
         while (!stopFlag.get()) {
-            // TODO: Local logic which works through the queue
             this.workItem = Worker.workQueue.get();
-            this.logger.log(Level.DEBUG, "Got an element from the queue.");
+            this.logger.log(Level.DEBUG, "Popped an element from the queue.");
             switch (this.workItem.type) {
                 case SET:
-                    // TODO: Send to every server, wait for all responses before replying
                     this.handleSetRequest();
                     break;
                 case GET:
@@ -162,16 +163,24 @@ public final class Worker implements Callable<Object> {
         packet.clear();
 
         for (WorkUnit unit : results) {
-            if (!(unit instanceof WorkUnitStored)) {
-                if (unit instanceof WorkUnitInvalid) {
+            switch (unit.type) {
+                case STORED:
+                    break;
+                case INVALID:
                     this.logger.log(Level.FATAL, "Memcached returned invalid packet!");
                     packet.add(ByteBuffer.wrap(WorkUnitError.header));
-                } else {
+                    memtierCommunication(packet);
+                    return;
+                case SERVER_ERROR:
+                case CLIENT_ERROR:
                     packet.add(ByteBuffer.wrap(unit.getHeader()));
-                    // Note: We NEVER expect the return value to hold a body... This would be plain out incorrect!
-                }
-                memtierCommunication(packet);
-                return;
+                    //packet.add(ByteBuffer.wrap(WorkUnitError.header));
+                    memtierCommunication(packet);
+                    return;
+                default:
+                    packet.add(ByteBuffer.wrap(unit.getHeader()));
+                    memtierCommunication(packet);
+                    return;
             }
         }
 
@@ -220,9 +229,17 @@ public final class Worker implements Callable<Object> {
     private ArrayList<WorkUnit> memcachedCommunication(List<ByteBuffer> toSend, int expectedResponsesCount) throws IOException
     {
         ArrayList<WorkUnit> result = new ArrayList<>(expectedResponsesCount);
+        ArrayList<ArrayList<ByteBuffer>> copyToSend = new ArrayList<>();
+        for (int i = 0; i < this.memcachedSockets.size(); i++) {
+            copyToSend.add(new ArrayList<>(toSend.size()));
+            for (int j = i; j > -1; j--) {
+                copyToSend.get(i).addAll(toSend);
+            }
+        }
         int actualResponseCount = 0;
+        int updatedExpectedResponseCount = expectedResponsesCount;
 
-        while (actualResponseCount < expectedResponsesCount) {
+        while (actualResponseCount < updatedExpectedResponseCount) {
             try {
                 this.memcachedSelector.select();
 
@@ -234,33 +251,35 @@ public final class Worker implements Callable<Object> {
                     iter.remove();
 
                     if (key.isValid() && key.isWritable()) {
-                        // TODO: Bugfix here, kinda doesn't write to the second socket... why?
                         /*
                          * The key is writable but due to the nature of requiring a consumable element to send we must
                          * exchange the object.
                          */
 
-                        if (key.attachment() instanceof ArrayList) {
-                            memcachedWriteBytes((ArrayList<ByteBuffer>) key.attachment(), key);
-                        } else {
-                            ArrayList<ByteBuffer> list = new ArrayList<>(toSend.size());
-                            list.addAll(toSend);
-                            safeAttachMessage(key, list);
-                            memcachedWriteBytes((ArrayList<ByteBuffer>) key.attachment(), key);
+                        if (!(key.attachment() instanceof ArrayList)) {
+                            ArrayList<ByteBuffer> elementsToSend = MiscHelper.deepCopy(toSend);
+                            safeAttachMessage(key, elementsToSend);
                         }
+                        memcachedWriteBytes((ArrayList<ByteBuffer>) key.attachment(), key);
                     }
 
                     if (key.isValid() && key.isReadable()) {
-                        /*
-                         * Expect responses here.
-                         */
                         List<WorkUnit> completeRequest = ((PacketParser) key.attachment()).receiveAndParse(key);
                         if (completeRequest != null) {
-                            // TODO: Include logic for errors thrown by memcached... *sigh*
                             actualResponseCount += completeRequest.size();
                             result.addAll(completeRequest);
+
                             this.logger.log(Level.DEBUG, "Received reply from server {}", ((SocketChannel) key.channel()).getRemoteAddress());
+                            key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
                             //key.interestOps(SelectionKey.OP_WRITE);
+                            /*for (WorkUnit unit : completeRequest) {
+                                if (unit instanceof WorkUnitError) {
+                                    updatedExpectedResponseCount++;
+                                    key.interestOps(key.interestOps() | SelectionKey.OP_READ);
+                                } else {
+                                    key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
+                                }
+                            }*/
                         }
                     }
                 }
@@ -282,11 +301,8 @@ public final class Worker implements Callable<Object> {
      */
     private boolean memtierWriteBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
-        Tuple<ByteBuffer, Iterator<ByteBuffer>> result = writeBytes(toSend, key);
-        ByteBuffer buffer = result.first;
-        Iterator<ByteBuffer> iterator = result.second;
+        ByteBuffer buffer = writeBytes(toSend, key);
 
-        // Everything has been sent at this point, reattach the key's packetParser.
         if (toSend.isEmpty() && buffer != null && !buffer.hasRemaining()) {
             key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
             return true;
@@ -302,9 +318,7 @@ public final class Worker implements Callable<Object> {
      */
     private void memcachedWriteBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
-        Tuple<ByteBuffer, Iterator<ByteBuffer>> result = writeBytes(toSend, key);
-        ByteBuffer buffer = result.first;
-        Iterator<ByteBuffer> iterator = result.second;
+        ByteBuffer buffer = writeBytes(toSend, key);
 
         if (toSend.isEmpty() && buffer != null && !buffer.hasRemaining()) {
             // Everything has been sent at this point, reattach the key's packetParser.
@@ -320,7 +334,7 @@ public final class Worker implements Callable<Object> {
      * @param key Key on which to send.
      * @return Tuple of the state of this method.
      */
-    private Tuple<ByteBuffer, Iterator<ByteBuffer>> writeBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
+    private ByteBuffer writeBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
         ByteBuffer buffer = null;
         Iterator<ByteBuffer> iterator = toSend.iterator();
@@ -332,14 +346,13 @@ public final class Worker implements Callable<Object> {
             if (!buffer.hasRemaining()) {
                 iterator.remove();
             } else {
-                // TODO: Do we need to update our interest-sets
                 key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
                 key.selector().wakeup();
                 break;
             }
         }
 
-        return new Tuple<>(buffer, iterator);
+        return buffer;
     }
 
     /**
@@ -371,6 +384,15 @@ public final class Worker implements Callable<Object> {
     }
 
     /**
+     * Helper method for single invocations of fixed-length input to know which memcached gets the query next based on
+     * fairness.
+     */
+    private void schedulingHelper()
+    {
+
+    }
+
+    /**
      * Initializes each Worker such that it is ready for communication with the memcached servers.
      */
     private void initWorkTask() throws IOException
@@ -390,6 +412,7 @@ public final class Worker implements Callable<Object> {
             // Create a socketChannel that is already connected
             socketChannel = SocketChannel.open(Worker.memcachedServers.get(i));
             socketChannel.configureBlocking(false);
+            socketChannel.setOption(TCP_NODELAY, true);
 
             while (socketChannel.isConnectionPending()) {
                 socketChannel.finishConnect();
