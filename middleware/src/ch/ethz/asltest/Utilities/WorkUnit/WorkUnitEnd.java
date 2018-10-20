@@ -9,13 +9,18 @@ public final class WorkUnitEnd extends WorkUnit {
      * END\r\n
      */
 
-    public final byte[] header;
+    public static final byte[] header = "END\r\n".getBytes();
 
-    public WorkUnitEnd(SocketChannel originalSocket, byte[] header)
+    public WorkUnitEnd(SocketChannel originalSocket)
     {
         super(originalSocket);
         this.type = WorkUnitType.END;
-        this.header = header;
         this.readyForUsage = true;
+    }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return WorkUnitEnd.header;
     }
 }

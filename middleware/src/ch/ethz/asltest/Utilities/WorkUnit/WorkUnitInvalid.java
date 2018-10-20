@@ -10,4 +10,10 @@ public final class WorkUnitInvalid extends WorkUnit {
         this.type = WorkUnitType.INVALID;
         this.readyForUsage = true;
     }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return null;
+    }
 }

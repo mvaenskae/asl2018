@@ -20,4 +20,10 @@ public final class WorkUnitServerError extends WorkUnit {
         this.header = header;
         this.readyForUsage = true;
     }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return this.header;
+    }
 }

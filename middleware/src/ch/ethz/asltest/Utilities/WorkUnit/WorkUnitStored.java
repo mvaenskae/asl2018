@@ -9,13 +9,18 @@ public final class WorkUnitStored extends WorkUnit {
      * STORED\r\n
      */
 
-    public final byte[] header;
+    public final static byte[] header = "STORED\r\n".getBytes();
 
-    public WorkUnitStored(SocketChannel originalSocket, byte[] header)
+    public WorkUnitStored(SocketChannel originalSocket)
     {
         super(originalSocket);
         this.type = WorkUnitType.STORED;
-        this.header = header;
         this.readyForUsage = true;
+    }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return WorkUnitStored.header;
     }
 }

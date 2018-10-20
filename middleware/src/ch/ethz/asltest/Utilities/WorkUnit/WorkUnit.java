@@ -22,4 +22,11 @@ public abstract class WorkUnit {
         this.timestamp = new Timestamps(0);
         this.sendBackTo = originalSocket;
     }
+
+    public abstract byte[] getHeader();
+
+    public boolean hasBody()
+    {
+        return (this.type == WorkUnitType.SET || this.type == WorkUnitType.VALUE);
+    }
 }

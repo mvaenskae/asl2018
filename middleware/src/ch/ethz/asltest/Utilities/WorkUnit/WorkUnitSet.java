@@ -20,7 +20,7 @@ public final class WorkUnitSet extends WorkUnit {
 
     public final byte[] key;
     public final byte[] flags;
-    public final long exptime;
+    public final byte[] exptime;
     public final int bytes;
 
     public final byte[] header;
@@ -35,7 +35,7 @@ public final class WorkUnitSet extends WorkUnit {
         this.header = header;
         this.key = contents.get(0);
         this.flags = contents.get(1);
-        this.exptime = Long.parseLong(new String(contents.get(2)));
+        this.exptime = contents.get(2);
         this.bytes = Integer.parseInt(new String(contents.get(3)));
         this.whitespaces = whitespace;
     }
@@ -44,5 +44,11 @@ public final class WorkUnitSet extends WorkUnit {
     {
         this.body = body;
         this.readyForUsage = true;
+    }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return this.header;
     }
 }

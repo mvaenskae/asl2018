@@ -9,13 +9,18 @@ public final class WorkUnitError extends WorkUnit {
      * ERROR\r\n
      */
 
-    public final byte[] header;
+    public final static byte[] header = "ERROR\r\n".getBytes();
 
-    public WorkUnitError(SocketChannel originalSocket, byte[] header)
+    public WorkUnitError(SocketChannel originalSocket)
     {
         super(originalSocket);
         this.type = WorkUnitType.ERROR;
-        this.header = header;
         this.readyForUsage = true;
+    }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return WorkUnitError.header;
     }
 }

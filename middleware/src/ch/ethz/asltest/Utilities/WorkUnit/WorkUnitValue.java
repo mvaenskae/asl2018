@@ -42,4 +42,10 @@ public final class WorkUnitValue extends WorkUnit {
         this.body = body;
         this.readyForUsage = true;
     }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return this.header;
+    }
 }

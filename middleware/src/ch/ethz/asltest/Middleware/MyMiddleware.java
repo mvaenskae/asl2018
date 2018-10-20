@@ -5,6 +5,7 @@ import ch.ethz.asltest.Utilities.Misc.IPPair;
 import ch.ethz.asltest.Utilities.PacketParser;
 import ch.ethz.asltest.Utilities.WorkQueue;
 import ch.ethz.asltest.Utilities.WorkUnit.WorkUnit;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -90,7 +91,6 @@ public final class MyMiddleware implements Runnable {
             System.exit(-3);
         }
 
-
         // Main logic for server to accept new channels and process them with a packet parser before pushing them onto
         // the queue
         while (!this.atomicStopFlag.get()) {
@@ -101,24 +101,21 @@ public final class MyMiddleware implements Runnable {
 
                 while (iter.hasNext()) {
                     SelectionKey key = iter.next();
+                    iter.remove();
 
-                    if (key.isAcceptable()) {
+                    if (key.isValid() && key.isAcceptable()) {
                         register(selector, this.serverChannel);
                     }
 
-                    if (key.isReadable()) {
+                    if (key.isValid() && key.isReadable()) {
                         List<WorkUnit> completeRequest = ((PacketParser) key.attachment()).receiveAndParse(key);
-                        if (completeRequest != null) {
+                        if (completeRequest != null && completeRequest.size() > 0) {
                             for (WorkUnit wu : completeRequest) {
                                 this.clientQueue.put(wu);
                             }
                         }
+                        Thread.sleep(1000);
                     }
-
-                    /*if (key.isWritable()) {
-                        // TODO: Here the networkThread is supposed to return the reply back via the socket...
-                    }*/
-                    iter.remove();
                 }
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
@@ -168,9 +165,9 @@ public final class MyMiddleware implements Runnable {
     private static void register(Selector selector, ServerSocketChannel serverSocket) throws IOException
     {
         SocketChannel client = serverSocket.accept();
+        MyMiddleware.logger.log(Level.DEBUG, "Connection established from {}", client.getRemoteAddress().toString());
         client.configureBlocking(false);
-        // TODO: Allocate a buffer here for each packet parser spawned...
-        SelectionKey final register = client.register(selector, SelectionKey.OP_READ, new PacketParser());
+        client.register(selector, SelectionKey.OP_READ, new PacketParser(client.getRemoteAddress().toString()));
     }
 
 
@@ -189,7 +186,7 @@ public final class MyMiddleware implements Runnable {
         }
         this.serverChannel.configureBlocking(false);
         this.serverChannel.register(selector, SelectionKey.OP_ACCEPT, null);
-        System.out.printf("Middleware accessible under %s\n", this.serverChannel.socket().getLocalSocketAddress());
+        this.logger.log(Level.INFO, "Middleware accessible under {}", this.serverChannel.socket().getLocalSocketAddress());
 
         // Initialize datastructures once the middleware is up
         this.clientQueue = new WorkQueue(CLIENT_QUEUE_SIZE);
@@ -199,11 +196,11 @@ public final class MyMiddleware implements Runnable {
         Worker.setIsSharded(this.isShardedRead);
 
         this.workerThreads = Executors.newFixedThreadPool(this.numThreadPoolThreads);
-        Collection<Callable<Object>> workers = new ArrayList<>(this.numThreadPoolThreads);
+        //Collection<Callable<Object>> workers = new ArrayList<>(this.numThreadPoolThreads);
         this.workerResults = new ArrayList<>(this.numThreadPoolThreads);
         for (int i = 0; i < this.numThreadPoolThreads; i++) {
             Worker temp = new Worker(i);
-            workers.add(temp);
+            //workers.add(temp);
             this.workerResults.add(this.workerThreads.submit(temp));
         }
     }

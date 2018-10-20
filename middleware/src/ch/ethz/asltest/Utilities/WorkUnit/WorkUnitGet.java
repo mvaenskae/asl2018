@@ -29,4 +29,10 @@ public final class WorkUnitGet extends WorkUnit {
         this.whitespaces = whitespaces;
         this.readyForUsage = true;
     }
+
+    @Override
+    public byte[] getHeader()
+    {
+        return this.header;
+    }
 }

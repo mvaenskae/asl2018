@@ -2,6 +2,7 @@ package ch.ethz.asltest.Utilities;
 
 import ch.ethz.asltest.Utilities.Misc.Tuple;
 import ch.ethz.asltest.Utilities.WorkUnit.*;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -22,16 +23,6 @@ public final class PacketParser {
     /**
      * Static fields which hold shared data
      **/
-    private static byte[] getHeader = "get".getBytes();
-    private static byte[] getsHeader = "gets".getBytes();
-    private static final byte[] valueHeader = "VALUE".getBytes();
-    private static final byte[] endHeader = "END".getBytes();
-    private static final byte[] setHeader = "set".getBytes();
-    private static byte[] storedHeader = "STORED".getBytes();
-    private static byte[] errorHeader = "ERROR".getBytes();
-    private static final byte[] clientErrorHeader = "CLIENT_ERROR".getBytes();
-    private static final byte[] serverErrorHeader = "SERVER_ERROR".getBytes();
-
     private static byte[] getHeaderParsing = "get ".getBytes();
     private static byte[] getsHeaderParsing = "gets ".getBytes();
     private static final byte[] valueHeaderParsing = "VALUE ".getBytes();
@@ -45,7 +36,7 @@ public final class PacketParser {
     /**
      * Internal buffer with respective metadata to generate byte[] from it
      **/
-    private final ByteBuffer buffer = ByteBuffer.allocateDirect(8192);
+    private final ByteBuffer buffer = ByteBuffer.allocate(8192);
     private int bufferOffset;
     private int headerOffset;
     private int bodySize;
@@ -75,33 +66,75 @@ public final class PacketParser {
 
     public PacketParser(String loggerName)
     {
-        this.logger = LogManager.getLogger(PacketParser.class.getName());
+        this.logger = LogManager.getLogger(PacketParser.class + "-" + loggerName);
     }
 
     public List<WorkUnit> receiveAndParse(SelectionKey key)
     {
         this.client = (SocketChannel) key.channel();
 
-        // TODO: Parse single packets with internal method which are added here to the list...
-        // This should generalize how many bytes there are still "busy" in this stream and as such we can correctly
-        // read them the moment they are on the OS buffer...
-        // Any new packet parsed will result in a compact() of the buffer for consistency reasons...
+        WorkUnit temp = null;
+        ArrayList<WorkUnit> result = new ArrayList<>();
 
+        while (true) {
+            try {
+                temp = internalParsing();
+            } catch (IOException e) {
+                this.logger.log(Level.ERROR, "Unexpected problems with this channel, flushing ByteBuffer.");
+                this.logger.log(Level.ERROR, e.getMessage());
+                break;
+            }
+
+            if (temp != null) {
+                result.add(temp);
+            } else {
+                break;
+            }
+        }
+
+        // Clean the state until new data is available
+        // this.resetState();
+
+        return result;
+    }
+
+    /**
+     * Main parsing logic which will parse at most a single packet and return either a complete packet or nothing to
+     * indicate the stream has currently been exhausted and needs to receive new data.
+     * @return
+     */
+    private WorkUnit internalParsing() throws IOException
+    {
+        // If a packet has been parsed and the buffer has been compacted, maybe it would be beneficial to try and fill
+        // up any remaining NIC-bound data...
         int lastOffset;
         try {
             lastOffset = client.read(this.buffer);
+            this.logger.log(Level.DEBUG, "Parsing {} bytes of data received.", lastOffset);
             this.buffer.flip();
         } catch (IOException e) {
-            // TODO: Log this here
-            e.printStackTrace();
-            return null;
+            this.buffer.clear();
+            throw e;
         }
         this.bufferOffset += lastOffset;
+
+        if (lastOffset == -1) {
+            this.logger.log(Level.WARN, "Client closed connection, closing the SocketChannel proactively.");
+            this.buffer.clear();
+            try {
+                this.client.close();
+            } catch (IOException e) {
+                throw e;
+            }
+            return null;
+        }
 
         if (!headerFound) {
             // We are still receiving for the header
             // Scan here for "EOL" as per specification, store the header once it's found also in a byte[]
-            for (int i = this.bufferOffset - lastOffset; i < bufferOffset; ++i) {
+            this.logger.log(Level.DEBUG, "Receiving header.");
+            boolean shouldBreak = headerFound;
+            for (int i = this.bufferOffset - lastOffset; i < bufferOffset && !shouldBreak; ++i) {
                 switch (this.lineState) {
                     case READING:
                         if (this.buffer.get(i) == (byte) '\r') {
@@ -114,43 +147,58 @@ public final class PacketParser {
                             this.headerOffset = i + 1;
                             this.header = new byte[this.headerOffset];
                             this.buffer.get(this.header, 0, this.headerOffset);
+                            this.logger.log(Level.DEBUG, "Header received.");
                         }
                         this.lineState = LineParsingState.READING;
+                        shouldBreak = true;
                         break;
                 }
             }
+
+            if (!shouldBreak) {
+                this.buffer.compact();
+            }
         }
 
-        if (!headerParsed) {
+        if (headerFound && !headerParsed) {
             // Header fully received, parse it
+            this.logger.log(Level.DEBUG, "Parsing header.");
             this.parseHeader();
             this.headerParsed = true;
         }
 
-        if (hasBody) {
+        if (headerFound && headerParsed && hasBody) {
             // If there is a body expected, parse it in here...
+            this.logger.log(Level.DEBUG, "Parsing body.");
             this.setBody();
         }
 
-        ArrayList<WorkUnit> result = new ArrayList<>();
+        WorkUnit result = null;
         if (this.header != null && (!this.hasBody || this.body != null)) {
             if (workUnit != null) {
-                result.add(this.workUnit);
-                this.resetState();
+                this.logger.log(Level.DEBUG, "Packet found, putting on return list.");
+                result = this.workUnit;
+                cleanTemporaryState();
             }
         }
 
-        this.buffer.compact();
+        if (!this.buffer.hasRemaining()) {
+            this.buffer.compact();
+            this.bufferOffset = 0;
+            this.headerOffset = 0;
+        }
+
+        this.logger.log(Level.DEBUG, "Parsing finished for current packet.");
         return result;
     }
 
     /**
-     * Internal method which statefully saves the body of the request.
+     * Internal method which statefully saves the body of the request and marks the WorkUnit as usable.
      */
     private void setBody()
     {
         this.bodyBufferedSize = this.bufferOffset - this.headerOffset;
-        if (this.bodyBufferedSize == this.bodySize + 2) {
+        if (this.bodyBufferedSize >= this.bodySize + 2) {
             this.body = new byte[this.bodySize + 2];
             this.buffer.get(this.body, 0, this.bodySize + 2);
 
@@ -159,35 +207,32 @@ public final class PacketParser {
             } else if (this.workUnit.type.equals(WorkUnitType.VALUE)) {
                 ((WorkUnitValue) this.workUnit).setBody(this.body);
             }
+        } else {
+            this.buffer.compact();
         }
     }
 
     /**
-     * Internal method which resets the state of this instance.
+     * Method to clean up state after a packet has been fully parsed.
      */
-    private void resetState()
+    private void cleanTemporaryState()
     {
-        // TODO: Complete this...
         this.buffer.compact();
 
         this.bufferOffset = 0;
         this.headerOffset = 0;
-        this.bodyBufferedSize = 0;
         this.bodySize = 0;
+        this.bodyBufferedSize = 0;
 
         this.errorString = null;
         this.header = null;
         this.body = null;
+        this.workUnit = null;
 
+        this.lineState = LineParsingState.READING;
         this.headerFound = false;
         this.headerParsed = false;
         this.hasBody = false;
-
-        this.lineState = LineParsingState.READING;
-
-        this.workUnit = null;
-        this.client = null;
-
     }
 
     /**
@@ -248,7 +293,10 @@ public final class PacketParser {
      */
     private void parseHeaderFailure()
     {
+        this.logger.log(Level.DEBUG, "Parsing 'I_N_V_A_L_I_D' header...");
         this.workUnit = new WorkUnitInvalid(this.client);
+        this.logger.log(Level.DEBUG, "Parsed 'I_N_V_A_L_I_D' header.");
+        this.buffer.compact();
     }
 
     /**
@@ -282,6 +330,7 @@ public final class PacketParser {
      */
     private void parseGetHeader(int startOffset)
     {
+        this.logger.log(Level.DEBUG, "Parsing 'get' header...");
         ArrayList<Integer> whitespace;
         ArrayList<byte[]> contents;
         Tuple<ArrayList<Integer>, ArrayList<byte[]>> result = this.parseHeaderGeneric(startOffset);
@@ -289,6 +338,7 @@ public final class PacketParser {
         contents = result.second;
 
         this.workUnit = new WorkUnitGet(this.client, this.header, contents, whitespace);
+        this.logger.log(Level.DEBUG, "Parsed 'get' header.");
     }
 
     /**
@@ -296,6 +346,7 @@ public final class PacketParser {
      */
     private void parseSetHeader()
     {
+        this.logger.log(Level.DEBUG, "Parsing 'set' header...");
         this.hasBody = true;
         ArrayList<Integer> whitespace;
         ArrayList<byte[]> contents;
@@ -305,6 +356,7 @@ public final class PacketParser {
 
         this.workUnit = new WorkUnitSet(this.client, this.header, contents, whitespace);
         this.bodySize = ((WorkUnitSet) this.workUnit).bytes;
+        this.logger.log(Level.DEBUG, "Parsed 'set' header.");
     }
 
     /**
@@ -312,6 +364,7 @@ public final class PacketParser {
      */
     private void parseValueHeader()
     {
+        this.logger.log(Level.DEBUG, "Parsing 'VALUE' header...");
         this.hasBody = true;
         ArrayList<Integer> whitespace;
         ArrayList<byte[]> contents;
@@ -321,6 +374,7 @@ public final class PacketParser {
 
         this.workUnit = new WorkUnitValue(this.client, this.header, contents, whitespace);
         this.bodySize = ((WorkUnitValue) this.workUnit).bytes;
+        this.logger.log(Level.DEBUG, "Parsed 'VALUE' header.");
     }
 
     /**
@@ -328,11 +382,13 @@ public final class PacketParser {
      */
     private void parseClientErrorHeader()
     {
-        int errorLength = this.headerOffset - 2 - PacketParser.clientErrorHeaderParsing.length;
-        this.errorString = new byte[errorLength];
-        this.buffer.get(this.errorString, PacketParser.clientErrorHeader.length, errorLength);
+        this.logger.log(Level.DEBUG, "Parsing 'CLIENT_ERROR' header...");
+        //int errorLength = this.headerOffset - 2 - PacketParser.clientErrorHeaderParsing.length;
+        //this.errorString = new byte[errorLength];
+        //this.buffer.get(this.errorString, 0, errorLength);
 
         this.workUnit = new WorkUnitClientError(this.client, header);
+        this.logger.log(Level.DEBUG, "Parsed 'CLIENT_ERROR' header.");
     }
 
     /**
@@ -340,11 +396,13 @@ public final class PacketParser {
      */
     private void parseServerErrorHeader()
     {
-        int errorLength = this.headerOffset - 2 - PacketParser.serverErrorHeaderParsing.length;
-        this.errorString = new byte[errorLength];
-        this.buffer.get(this.errorString, PacketParser.serverErrorHeader.length, errorLength);
+        this.logger.log(Level.DEBUG, "Parsing 'SERVER_ERROR' header...");
+        //int errorLength = this.headerOffset - 2 - PacketParser.serverErrorHeaderParsing.length;
+        //this.errorString = new byte[errorLength];
+        //this.buffer.get(this.errorString, PacketParser.serverErrorHeader.length, errorLength);
 
         this.workUnit = new WorkUnitServerError(this.client, header);
+        this.logger.log(Level.DEBUG, "Parsed 'SERVER_ERROR' header.");
     }
 
     /**
@@ -352,7 +410,10 @@ public final class PacketParser {
      */
     private void parseErrorHeader()
     {
-        this.workUnit = new WorkUnitError(this.client, header);
+        this.logger.log(Level.DEBUG, "Parsing 'ERROR' header...");
+        this.workUnit = new WorkUnitError(this.client);
+        this.logger.log(Level.DEBUG, "Parsed 'ERROR' header.");
+
     }
 
     /**
@@ -360,7 +421,9 @@ public final class PacketParser {
      */
     private void parseStoredHeader()
     {
-        this.workUnit = new WorkUnitStored(this.client, header);
+        this.logger.log(Level.DEBUG, "Parsing 'STORED' header...");
+        this.workUnit = new WorkUnitStored(this.client);
+        this.logger.log(Level.DEBUG, "Parsed 'STORED' header.");
     }
 
     /**
@@ -368,7 +431,9 @@ public final class PacketParser {
      */
     private void parseEndHeader()
     {
-        this.workUnit = new WorkUnitEnd(this.client, header);
+        this.logger.log(Level.DEBUG, "Parsing 'END' header...");
+        this.workUnit = new WorkUnitEnd(this.client);
+        this.logger.log(Level.DEBUG, "Parsed 'END' header.");
     }
 
     private enum LineParsingState {
