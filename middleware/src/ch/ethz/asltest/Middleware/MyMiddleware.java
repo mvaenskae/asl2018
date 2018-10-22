@@ -21,6 +21,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.net.StandardSocketOptions.TCP_NODELAY;
+
 
 public final class MyMiddleware implements Runnable {
 
@@ -114,7 +116,6 @@ public final class MyMiddleware implements Runnable {
                                 this.clientQueue.put(wu);
                             }
                         }
-                        Thread.sleep(1000);
                     }
                 }
             } catch (IOException | InterruptedException e) {
@@ -167,6 +168,7 @@ public final class MyMiddleware implements Runnable {
         SocketChannel client = serverSocket.accept();
         MyMiddleware.logger.log(Level.DEBUG, "Connection established from {}", client.getRemoteAddress().toString());
         client.configureBlocking(false);
+        client.setOption(TCP_NODELAY, true);
         client.register(selector, SelectionKey.OP_READ, new PacketParser(client.getRemoteAddress().toString()));
     }
 
@@ -186,7 +188,7 @@ public final class MyMiddleware implements Runnable {
         }
         this.serverChannel.configureBlocking(false);
         this.serverChannel.register(selector, SelectionKey.OP_ACCEPT, null);
-        this.logger.log(Level.INFO, "Middleware accessible under {}", this.serverChannel.socket().getLocalSocketAddress());
+        logger.log(Level.INFO, "Middleware accessible under {}", this.serverChannel.socket().getLocalSocketAddress());
 
         // Initialize datastructures once the middleware is up
         this.clientQueue = new WorkQueue(CLIENT_QUEUE_SIZE);

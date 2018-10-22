@@ -23,4 +23,10 @@ public final class WorkUnitEnd extends WorkUnit {
     {
         return WorkUnitEnd.header;
     }
+
+    @Override
+    public byte[] getBody()
+    {
+        return null;
+    }
 }

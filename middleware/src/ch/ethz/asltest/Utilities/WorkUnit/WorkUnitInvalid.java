@@ -16,4 +16,10 @@ public final class WorkUnitInvalid extends WorkUnit {
     {
         return null;
     }
+
+    @Override
+    public byte[] getBody()
+    {
+        return null;
+    }
 }

@@ -35,4 +35,10 @@ public final class WorkUnitGet extends WorkUnit {
     {
         return this.header;
     }
+
+    @Override
+    public byte[] getBody()
+    {
+        return null;
+    }
 }

@@ -9,14 +9,14 @@ public abstract class WorkUnit {
     public final Timestamps timestamp;
     public final SocketChannel sendBackTo;
 
-    public volatile boolean readyForUsage;
+    volatile boolean readyForUsage;
 
     /**
      * The following fields give quick access to respective data for the programmer
      */
     public WorkUnitType type;
 
-    public WorkUnit(SocketChannel originalSocket)
+    WorkUnit(SocketChannel originalSocket)
     {
         // TODO: Fix this timestamp here, it's semanticaly incorrect
         this.timestamp = new Timestamps(0);
@@ -24,6 +24,13 @@ public abstract class WorkUnit {
     }
 
     public abstract byte[] getHeader();
+
+    public abstract byte[] getBody();
+
+    public WorkUnitType getType()
+    {
+        return this.type;
+    }
 
     public boolean hasBody()
     {

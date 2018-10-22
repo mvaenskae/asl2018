@@ -15,52 +15,52 @@ import java.util.Arrays;
 import java.util.List;
 
 public final class PacketParser {
-    /**
+    /*
      * This class holds helper functions to correctly parse an incoming packet from memtier, designated for memcached.
      * It is able to interpret packets of operations GET, GETS and SET with arbitrary size keys.
      */
 
-    /**
+    /*
      * Static fields which hold shared data
-     **/
-    private static byte[] getHeaderParsing = "get ".getBytes();
-    private static byte[] getsHeaderParsing = "gets ".getBytes();
+     */
+    private static final byte[] getHeaderParsing = "get ".getBytes();
+    private static final byte[] getsHeaderParsing = "gets ".getBytes();
     private static final byte[] valueHeaderParsing = "VALUE ".getBytes();
     private static final byte[] endHeaderParsing = "END".getBytes();
     private static final byte[] setHeaderParsing = "set ".getBytes();
-    private static byte[] storedHeaderParsing = "STORED\r\n".getBytes();
-    private static byte[] errorHeaderParsing = "ERROR\r\n".getBytes();
+    private static final byte[] storedHeaderParsing = "STORED\r\n".getBytes();
+    private static final byte[] errorHeaderParsing = "ERROR\r\n".getBytes();
     private static final byte[] clientErrorHeaderParsing = "CLIENT_ERROR ".getBytes();
     private static final byte[] serverErrorHeaderParsing = "SERVER_ERROR ".getBytes();
 
-    /**
+    /*
      * Internal buffer with respective metadata to generate byte[] from it
-     **/
-    private final ByteBuffer buffer = ByteBuffer.allocate(8192);
+     */
+    private final ByteBuffer buffer = ByteBuffer.allocateDirect(8192);
     private int bufferOffset;
     private int headerOffset;
     private int bodySize;
     private int bodyBufferedSize;
 
-    /**
+    /*
      * Reference fields which hold parsed results, used to create new WorkUnits
-     **/
-    private byte[] errorString;
+     */
+    //private byte[] errorString;
     private byte[] header;
     private byte[] body;
     private WorkUnit workUnit;
 
-    /**
+    /*
      * Internal state of each PacketParser, need to be reset upon successfully parsing a new packet
-     **/
+     */
     private LineParsingState lineState = LineParsingState.READING;
     private boolean headerFound = false;
     private boolean headerParsed = false;
     private boolean hasBody = false;
 
-    /**
+    /*
      * Private helper objects
-     **/
+     */
     private final Logger logger;
     private SocketChannel client;
 
@@ -73,12 +73,13 @@ public final class PacketParser {
     {
         this.client = (SocketChannel) key.channel();
 
-        WorkUnit temp = null;
+        WorkUnit temp;
+        boolean hasMore = false;
         ArrayList<WorkUnit> result = new ArrayList<>();
 
         while (true) {
             try {
-                temp = internalParsing();
+                temp = internalParsing(hasMore);
             } catch (IOException e) {
                 this.logger.log(Level.ERROR, "Unexpected problems with this channel, flushing ByteBuffer.");
                 this.logger.log(Level.ERROR, e.getMessage());
@@ -87,6 +88,7 @@ public final class PacketParser {
 
             if (temp != null) {
                 result.add(temp);
+                hasMore = true;
             } else {
                 break;
             }
@@ -101,13 +103,15 @@ public final class PacketParser {
     /**
      * Main parsing logic which will parse at most a single packet and return either a complete packet or nothing to
      * indicate the stream has currently been exhausted and needs to receive new data.
-     * @return
+     * @return A complete workUnit on successful parsing, else throws an IOException
      */
-    private WorkUnit internalParsing() throws IOException
+    private WorkUnit internalParsing(boolean hasMore) throws IOException
     {
         // If a packet has been parsed and the buffer has been compacted, maybe it would be beneficial to try and fill
         // up any remaining NIC-bound data...
         int lastOffset;
+        int lineReadOffset = 0;
+
         try {
             lastOffset = client.read(this.buffer);
             this.logger.log(Level.DEBUG, "Parsing {} bytes of data received.", lastOffset);
@@ -116,60 +120,32 @@ public final class PacketParser {
             this.buffer.clear();
             throw e;
         }
+
+        if (hasMore) {
+            lastOffset += this.buffer.limit();
+        }
         this.bufferOffset += lastOffset;
 
         if (lastOffset == -1) {
             this.logger.log(Level.WARN, "Client closed connection, closing the SocketChannel proactively.");
             this.buffer.clear();
-            try {
-                this.client.close();
-            } catch (IOException e) {
-                throw e;
-            }
+            this.client.close();
             return null;
         }
 
         if (!headerFound) {
             // We are still receiving for the header
             // Scan here for "EOL" as per specification, store the header once it's found also in a byte[]
-            this.logger.log(Level.DEBUG, "Receiving header.");
-            boolean shouldBreak = headerFound;
-            for (int i = this.bufferOffset - lastOffset; i < bufferOffset && !shouldBreak; ++i) {
-                switch (this.lineState) {
-                    case READING:
-                        if (this.buffer.get(i) == (byte) '\r') {
-                            this.lineState = LineParsingState.SLASH;
-                        }
-                        break;
-                    case SLASH:
-                        if (this.buffer.get(i) == (byte) '\n') {
-                            this.headerFound = true;
-                            this.headerOffset = i + 1;
-                            this.header = new byte[this.headerOffset];
-                            this.buffer.get(this.header, 0, this.headerOffset);
-                            this.logger.log(Level.DEBUG, "Header received.");
-                        }
-                        this.lineState = LineParsingState.READING;
-                        shouldBreak = true;
-                        break;
-                }
-            }
-
-            if (!shouldBreak) {
-                this.buffer.compact();
-            }
+            lineReadOffset = this.readLine(lastOffset, false);
         }
 
         if (headerFound && !headerParsed) {
             // Header fully received, parse it
-            this.logger.log(Level.DEBUG, "Parsing header.");
-            this.parseHeader();
-            this.headerParsed = true;
+            this.parseHeader(lineReadOffset);
         }
 
         if (headerFound && headerParsed && hasBody) {
             // If there is a body expected, parse it in here...
-            this.logger.log(Level.DEBUG, "Parsing body.");
             this.setBody();
         }
 
@@ -182,7 +158,7 @@ public final class PacketParser {
             }
         }
 
-        if (!this.buffer.hasRemaining()) {
+        if (!this.buffer.hasRemaining() || (headerFound && headerParsed)) {
             this.buffer.compact();
             this.bufferOffset = 0;
             this.headerOffset = 0;
@@ -192,15 +168,66 @@ public final class PacketParser {
         return result;
     }
 
+    private int readLine(int readOffset, boolean flushLine)
+    {
+        this.logger.log(Level.DEBUG, "Receiving header.");
+
+        boolean shouldBreak = !flushLine && headerFound;
+        int endOffset = 0, i = 0;
+        if (flushLine) {
+            i = readOffset;
+        } else {
+            i = this.bufferOffset - readOffset;
+        }
+
+        for ( ; i < bufferOffset && !shouldBreak; ++i) {
+            switch (this.lineState) {
+                case READING:
+                    if (this.buffer.get(i) == (byte) '\r') {
+                        this.lineState = LineParsingState.SLASH;
+                    }
+                    break;
+                case SLASH:
+                    if (this.buffer.get(i) == (byte) '\n' && !flushLine) {
+                        this.headerFound = true;
+                        this.headerOffset = i + 1;
+                        this.header = new byte[this.headerOffset];
+                        this.buffer.get(this.header, 0, this.headerOffset);
+                        this.logger.log(Level.DEBUG, "Header received.");
+                    }
+                    this.lineState = LineParsingState.READING;
+                    shouldBreak = true;
+                    endOffset = i + 1;
+                    break;
+            }
+        }
+
+        if (!shouldBreak || flushLine) {
+            if (flushLine && this.buffer.position() < endOffset) {
+                this.buffer.position(endOffset);
+            }
+            this.buffer.compact();
+        }
+
+        return endOffset;
+    }
+
     /**
      * Internal method which statefully saves the body of the request and marks the WorkUnit as usable.
      */
     private void setBody()
     {
+        this.logger.log(Level.DEBUG, "Parsing body.");
         this.bodyBufferedSize = this.bufferOffset - this.headerOffset;
         if (this.bodyBufferedSize >= this.bodySize + 2) {
             this.body = new byte[this.bodySize + 2];
             this.buffer.get(this.body, 0, this.bodySize + 2);
+
+            if (this.body[this.body.length - 2] != '\r' && this.body[this.body.length - 1] != '\n') {
+                this.readLine(this.body.length, true);
+            } else if (this.body[this.body.length - 1] == '\r') {
+                this.readLine(this.body.length - 1, true);
+            }
 
             if (this.workUnit.type.equals(WorkUnitType.SET)) {
                 ((WorkUnitSet) this.workUnit).setBody(this.body);
@@ -213,34 +240,13 @@ public final class PacketParser {
     }
 
     /**
-     * Method to clean up state after a packet has been fully parsed.
-     */
-    private void cleanTemporaryState()
-    {
-        this.buffer.compact();
-
-        this.bufferOffset = 0;
-        this.headerOffset = 0;
-        this.bodySize = 0;
-        this.bodyBufferedSize = 0;
-
-        this.errorString = null;
-        this.header = null;
-        this.body = null;
-        this.workUnit = null;
-
-        this.lineState = LineParsingState.READING;
-        this.headerFound = false;
-        this.headerParsed = false;
-        this.hasBody = false;
-    }
-
-    /**
      * Internal method which delegates to the correct parsing method for the first bytes in the header.
      * This method requires a helper method which adjusts the state of this instance accordingly.
      */
-    private void parseHeader()
+    private void parseHeader(int readOffset)
     {
+        this.logger.log(Level.DEBUG, "Parsing header.");
+
         if ((this.header.length > PacketParser.getHeaderParsing.length - 1 &&
                 this.header[0] == 'g' && this.header[1] == 'e' && this.header[2] == 't') &&
                 (this.header[3] == ' ' ||
@@ -281,22 +287,32 @@ public final class PacketParser {
                 this.header[12] == ' ') {
             this.parseServerErrorHeader();
         } else {
-            this.parseHeaderFailure();
+            this.parseHeaderFailure(readOffset);
         }
+
+        this.headerParsed = true;
     }
 
     /**
-     * Helper method to indicate an invalid Memcached request was sent.
-     * Per specification until EoL is supposed to be read and then retried again. As such this method does nothing as
-     * the whole line has already been "read in" and this is only processing it. Also as no body is expected this method
-     * will not set it as such
+     * Method to clean up state after a packet has been fully parsed.
      */
-    private void parseHeaderFailure()
+    private void cleanTemporaryState()
     {
-        this.logger.log(Level.DEBUG, "Parsing 'I_N_V_A_L_I_D' header...");
-        this.workUnit = new WorkUnitInvalid(this.client);
-        this.logger.log(Level.DEBUG, "Parsed 'I_N_V_A_L_I_D' header.");
         this.buffer.compact();
+
+        this.bufferOffset = 0;
+        this.headerOffset = 0;
+        this.bodySize = 0;
+        this.bodyBufferedSize = 0;
+
+        this.header = null;
+        this.body = null;
+        this.workUnit = null;
+
+        this.lineState = LineParsingState.READING;
+        this.headerFound = false;
+        this.headerParsed = false;
+        this.hasBody = false;
     }
 
     /**
@@ -324,16 +340,31 @@ public final class PacketParser {
     }
 
     /**
+     * Helper method to indicate an invalid Memcached request was sent.
+     * Per specification until EoL is supposed to be read and then retried again. As such this method does nothing as
+     * the whole line has already been "read in" and this is only processing it. Also as no body is expected this method
+     * will not set it as such
+     */
+    private void parseHeaderFailure(int readOffset)
+    {
+        this.logger.log(Level.DEBUG, "Parsing 'I_N_V_A_L_I_D' header...");
+        this.workUnit = new WorkUnitInvalid(this.client);
+        this.logger.log(Level.DEBUG, "Parsed 'I_N_V_A_L_I_D' header. Discarding data until end of line.");
+        this.readLine(readOffset + 1, true);
+        this.buffer.compact();
+    }
+
+    /**
      * Parses a GET(S) statefully for this instance.
      *
-     * @param startOffset Offset where the first field starts in the buffer.
+     * @param readOffset Offset where the first field starts in the buffer.
      */
-    private void parseGetHeader(int startOffset)
+    private void parseGetHeader(int readOffset)
     {
         this.logger.log(Level.DEBUG, "Parsing 'get' header...");
         ArrayList<Integer> whitespace;
         ArrayList<byte[]> contents;
-        Tuple<ArrayList<Integer>, ArrayList<byte[]>> result = this.parseHeaderGeneric(startOffset);
+        Tuple<ArrayList<Integer>, ArrayList<byte[]>> result = this.parseHeaderGeneric(readOffset);
         whitespace = result.first;
         contents = result.second;
 

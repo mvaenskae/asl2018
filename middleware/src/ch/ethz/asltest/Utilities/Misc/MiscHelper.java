@@ -14,15 +14,17 @@ public final class MiscHelper {
         return buffer.getLong();
     }
 
-    public static int getIntFromByteArray(byte[] bytes)
-    {
-        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
-        buffer.put(bytes);
-        buffer.flip(); //need flip
-        return buffer.getInt();
-    }
+// --Commented out by Inspection START (20/10/18 18:19):
+//    public static int getIntFromByteArray(byte[] bytes)
+//    {
+//        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
+//        buffer.put(bytes);
+//        buffer.flip(); //need flip
+//        return buffer.getInt();
+//    }
+// --Commented out by Inspection STOP (20/10/18 18:19)
 
-    public static ByteBuffer deepCopy(ByteBuffer original)
+    private static ByteBuffer deepCopy(ByteBuffer original)
     {
         ByteBuffer copy = ByteBuffer.allocate(original.capacity());
         original.rewind();
@@ -32,9 +34,18 @@ public final class MiscHelper {
         return copy;
     }
 
+    public static ArrayList<ByteBuffer> shallowCopy(List<ByteBuffer> original)
+    {
+        ArrayList<ByteBuffer> copy = new ArrayList<>(original.size());
+        for(ByteBuffer buf : original) {
+            copy.add(buf.duplicate());
+        }
+        return copy;
+    }
+
     public static ArrayList<ByteBuffer> deepCopy(List<ByteBuffer> original)
     {
-        ArrayList<ByteBuffer> copy = new ArrayList<>();
+        ArrayList<ByteBuffer> copy = new ArrayList<>(original.size());
         for(ByteBuffer buf : original) {
             copy.add(deepCopy(buf));
         }

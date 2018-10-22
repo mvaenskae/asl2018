@@ -51,4 +51,10 @@ public final class WorkUnitSet extends WorkUnit {
     {
         return this.header;
     }
+
+    @Override
+    public byte[] getBody()
+    {
+        return this.body;
+    }
 }

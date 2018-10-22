@@ -23,4 +23,10 @@ public final class WorkUnitError extends WorkUnit {
     {
         return WorkUnitError.header;
     }
+
+    @Override
+    public byte[] getBody()
+    {
+        return null;
+    }
 }

@@ -48,4 +48,10 @@ public final class WorkUnitValue extends WorkUnit {
     {
         return this.header;
     }
+
+    @Override
+    public byte[] getBody()
+    {
+        return this.body;
+    }
 }
