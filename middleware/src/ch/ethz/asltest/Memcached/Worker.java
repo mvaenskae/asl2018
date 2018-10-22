@@ -48,14 +48,15 @@ public final class Worker implements Callable<Object> {
     // Local fields for statistics
     private int getCounter = 0;
     private int setCounter = 0;
-    private ByteBuffer temp;
+
+    private final WorkerStats workerStats = new WorkerStats();
 
     /**
      * Sets the workQueue statically which instances are referring to.
      *
      * @param queue workQueue to be used by instances.
      */
-    public static void setWorkQueue(WorkQueue queue)
+    public static void setWorkQueue(final WorkQueue queue)
     {
         Worker.workQueue = queue;
     }
@@ -65,7 +66,7 @@ public final class Worker implements Callable<Object> {
      *
      * @param memcachedServers List of memcached servers used by instances.
      */
-    public static void setMemcachedServers(List<InetSocketAddress> memcachedServers)
+    public static void setMemcachedServers(final List<InetSocketAddress> memcachedServers)
     {
         Worker.memcachedServers = memcachedServers;
     }
@@ -75,7 +76,7 @@ public final class Worker implements Callable<Object> {
      *
      * @param isSharded Set the GET reuqests as sharded.
      */
-    public static void setIsSharded(boolean isSharded)
+    public static void setIsSharded(final boolean isSharded)
     {
         Worker.isSharded = isSharded;
     }
@@ -130,6 +131,7 @@ public final class Worker implements Callable<Object> {
 
     private void handleGetRequest() throws IOException
     {
+        // TODO: Logging here
         // TODO: Refactor this... *sigh*
         this.workItem.sendBackTo.register(this.memtierSelector, SelectionKey.OP_WRITE);
         Map<SelectionKey, Integer> expectedResponseCount;
@@ -169,8 +171,8 @@ public final class Worker implements Callable<Object> {
                 iterator += entry.getValue();
                 requestMap.put(entry.getKey(), request);
 
-                expectedResponseCount.merge(entry.getKey(), (entry.getValue() == 0) ? 0 : 1, Integer::sum);
                 this.fairnessMap.merge(entry.getKey(), entry.getValue(), Integer::sum);
+                expectedResponseCount.merge(entry.getKey(), (entry.getValue() == 0) ? 0 : 1, Integer::sum);
             }
         } else {
             // Set the selected channel to writeable for the memcached server used
@@ -226,6 +228,7 @@ public final class Worker implements Callable<Object> {
      */
     private void handleSetRequest() throws IOException
     {
+        // TODO: Logging here
         this.workItem.sendBackTo.register(this.memtierSelector, SelectionKey.OP_WRITE);
         WorkUnitSet setRequest = (WorkUnitSet) this.workItem;
 
@@ -280,6 +283,7 @@ public final class Worker implements Callable<Object> {
      */
     private void memtierCommunication(List<ByteBuffer> toSend) throws IOException
     {
+        // TODO: Logging here
         boolean responseSent = false;
         SelectionKey sKeyUsed = null;
 
@@ -319,6 +323,7 @@ public final class Worker implements Callable<Object> {
      */
     private List<WorkUnit> memcachedCommunication(WorkUnitType type, Map<SelectionKey, List<ByteBuffer>> toSend, Map<SelectionKey, Integer> expectedResponsesCount) throws IOException
     {
+        // TODO: Logging here
         int numberOfResponses = expectedResponsesCount.values().stream().mapToInt(i -> i.intValue()).sum();
 
         List<WorkUnit> result = new ArrayList<>(numberOfResponses);
@@ -395,6 +400,7 @@ public final class Worker implements Callable<Object> {
      */
     private boolean memtierWriteBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
+        // TODO: Logging here
         ByteBuffer buffer = writeBytes(toSend, key);
 
         if (toSend.isEmpty() && buffer != null && !buffer.hasRemaining()) {
@@ -416,6 +422,7 @@ public final class Worker implements Callable<Object> {
      */
     private void memcachedWriteBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
+        // TODO: Logging here
         ByteBuffer buffer = writeBytes(toSend, key);
 
         if (toSend.isEmpty() && buffer != null && !buffer.hasRemaining()) {
@@ -439,6 +446,7 @@ public final class Worker implements Callable<Object> {
      */
     private ByteBuffer writeBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
+        // TODO: Logging here
         ByteBuffer buffer = null;
         Iterator<ByteBuffer> iterator = toSend.iterator();
 
@@ -463,7 +471,7 @@ public final class Worker implements Callable<Object> {
         try {
             key.attach(this.packetParsers.get(((SocketChannel) key.channel()).getRemoteAddress().toString()));
         } catch (IOException e) {
-            this.logger.log(Level.ERROR, "Problem reattaching PacketParser.");
+            this.logger.log(Level.ERROR, "Couldn't reattach channel's PacketParser.");
             e.printStackTrace();
         }
     }
@@ -485,13 +493,16 @@ public final class Worker implements Callable<Object> {
     private SelectionKey getNextServer()
     {
         int minimum = Collections.min(this.fairnessMap.values());
+        SelectionKey last = null;
         for (Map.Entry<SelectionKey, Integer> entry : this.fairnessMap.entrySet()) {
             if (entry.getValue() == minimum) {
                 return entry.getKey();
             }
+            last = entry.getKey();
         }
 
-        return null;
+        this.logger.log(Level.ERROR, "Couldn't find minimum in Map of memcached servers. Getting some server.");
+        return last;
     }
 
     /**
@@ -524,12 +535,14 @@ public final class Worker implements Callable<Object> {
 
             if (deltaMaxMin >= availableRequests) {
                 // We cannot even fairly distribute to one server... Try best effort
+                this.logger.log(Level.TRACE, "Load balancing unsuccessful. Best effort following.");
                 result.merge(min.getKey(), availableRequests, Integer::sum);
                 return result;
             }
 
             int splitMin = deltaMaxMin / 2;
             int splitMax = ((deltaMaxMin % 2) == 1) ? splitMin + 1 : splitMin;
+            this.logger.log(Level.TRACE, "Load balancing sharded reads amongs memcached servers.");
             result.merge(min.getKey(), splitMin, Integer::sum);
             result.merge(max.getKey(), splitMax, Integer::sum);
         } else {
@@ -553,14 +566,15 @@ public final class Worker implements Callable<Object> {
                 arrayEntry.set(0, temp);
             }
 
-            max = arrayEntry.get(0);
+            max = arrayEntry.get(2);
             mid = arrayEntry.get(1);
-            min = arrayEntry.get(2);
+            min = arrayEntry.get(0);
 
             int deltaMidMin = mid.getValue() - min.getValue();
 
             if (deltaMidMin >= availableRequests) {
                 // We cannot even fairly distribute to one server... Try best effort
+                this.logger.log(Level.TRACE, "Load balancing unsuccessful. Best effort following.");
                 result.merge(min.getKey(), availableRequests, Integer::sum);
                 return result;
             }
@@ -574,6 +588,7 @@ public final class Worker implements Callable<Object> {
                 // We cannot balance nicely the rest of requests to the two smallest buckets
                 splitMin = deltaMaxMid / 2;
                 splitMid = ((deltaMaxMid % 2) == 1) ? splitMin + 1 : splitMin;
+                this.logger.log(Level.TRACE, "Load balancing unsuccessful. Best effort following.");
                 result.merge(min.getKey(), splitMin, Integer::sum);
                 result.merge(mid.getKey(), splitMid, Integer::sum);
                 return result;
@@ -590,6 +605,7 @@ public final class Worker implements Callable<Object> {
                 splitMin = splitMid = availableRequests / 3 + 1;
                 splitMax = splitMin - 1;
             }
+            this.logger.log(Level.TRACE, "Load balancing sharded reads amongs memcached servers.");
             result.merge(min.getKey(), splitMin, Integer::sum);
             result.merge(mid.getKey(), splitMid, Integer::sum);
             result.merge(max.getKey(), splitMax, Integer::sum);
@@ -607,16 +623,14 @@ public final class Worker implements Callable<Object> {
         PacketParser packetParser;
         String remoteAddress;
 
-        // The instance's selector used for non-blocking IO with memcached
+        // The instance's selector used for non-blocking IO with memcached and memtier
         this.memcachedSelector = Selector.open();
+        this.memtierSelector = Selector.open();
         int interestSet = 0; // Per default we are not interested in anything for the registered SocketChannel
 
-        // The instance's selector used for non-blocking IO with memtier
-        this.memtierSelector = Selector.open();
-
-        for (int i = 0; i < Worker.memcachedServers.size(); ++i) {
+        for (InetSocketAddress memcachedServer : Worker.memcachedServers) {
             // Create a socketChannel that is already connected
-            socketChannel = SocketChannel.open(Worker.memcachedServers.get(i));
+            socketChannel = SocketChannel.open(memcachedServer);
             socketChannel.configureBlocking(false);
             socketChannel.setOption(TCP_NODELAY, true);
 
@@ -629,11 +643,9 @@ public final class Worker implements Callable<Object> {
             packetParser = new PacketParser(remoteAddress);
             this.packetParsers.put(remoteAddress, packetParser);
 
-            // register the socketChannel to this instances' memcachedSelector
-            SelectionKey socketKey = socketChannel.register(this.memcachedSelector, interestSet, packetParser);
-            this.fairnessMap.put(socketKey, 0);
-            this.logger.info("Thread {} connected to server {}", this.id,
-                    Worker.memcachedServers.get(i).toString());
+            // Register the socketChannel to this instances' memcachedSelector
+            this.fairnessMap.put(socketChannel.register(this.memcachedSelector, interestSet, packetParser), 0);
+            this.logger.info("Thread {} connected to server {}", this.id, memcachedServer.toString());
         }
     }
 }
