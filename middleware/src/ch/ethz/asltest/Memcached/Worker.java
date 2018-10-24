@@ -91,7 +91,7 @@ public final class Worker implements Callable<Object> {
     }
 
     @Override
-    public Object call() throws InterruptedException, IOException
+    public Object call() throws IOException
     {
         try {
             this.initWorkTask();
@@ -101,29 +101,36 @@ public final class Worker implements Callable<Object> {
             return null;
         }
 
-        while (!stopFlag.get()) {
-            this.workItem = Worker.workQueue.get();
-            switch (this.workItem.type) {
-                case SET:
-                    this.logger.log(Level.INFO, "Got 'set' from queue.");
-                    this.handleSetRequest();
-                    break;
-                case GET:
-                    this.logger.log(Level.INFO, "Got 'get' from queue.");
-                    this.handleGetRequest();
-                    break;
-                case INVALID:
-                    this.logger.log(Level.INFO, "Invalid request on the queue.");
-                    ++invalidHeaders;
-                    // Fallthrough
-                default:
-                    break;
+        try {
+            while (!stopFlag.get()) {
+                this.workItem = Worker.workQueue.get();
+                switch (this.workItem.type) {
+                    case SET:
+                        this.logger.log(Level.INFO, "Got 'set' from queue.");
+                        this.handleSetRequest();
+                        break;
+                    case GET:
+                        this.logger.log(Level.INFO, "Got 'get' from queue.");
+                        this.handleGetRequest();
+                        break;
+                    case INVALID:
+                        this.logger.log(Level.INFO, "Invalid request on the queue.");
+                        ++invalidHeaders;
+                        // Fallthrough
+                    default:
+                        break;
+                }
             }
+        } catch (InterruptedException e) {
+            this.logger.log(Level.INFO, "Worker {} was interrupted.", this.id);
+        } finally {
+            // Cleanup for thread termination
+            for (SelectionKey sKey : this.memcachedSelector.keys()) {
+                sKey.channel().close();
+                sKey.cancel();
+            }
+            this.memcachedSelector.close();
         }
-
-        /*for (SocketChannel channel : this.memcachedSockets) {
-            channel.close();
-        }*/
 
         //TODO: Here generate statistics and return them in an object/struct/whatevs
         return null;
@@ -366,7 +373,7 @@ public final class Worker implements Callable<Object> {
                                 expectedResponsesCount.put(key, expectedResponsesCount.get(key) - completeRequest.size());
                                 actualResponseCount += completeRequest.size();
                                 result.addAll(completeRequest);
-                                if (type == WorkUnitType.GET) {
+                                if (type == WorkUnitType.GET && expectedResponsesCount.get(key) > 0) {
                                     if (result.stream().anyMatch(unit -> unit.type == WorkUnitType.END)) {
                                         actualResponseCount += expectedResponsesCount.get(key);
                                         expectedResponsesCount.put(key, 0);
@@ -540,8 +547,11 @@ public final class Worker implements Callable<Object> {
                 return result;
             }
 
-            int splitMin = deltaMaxMin / 2;
-            int splitMax = ((deltaMaxMin % 2) == 1) ? splitMin + 1 : splitMin;
+            availableRequests -= deltaMaxMin;
+            result.merge(min.getKey(), deltaMaxMin, Integer::sum);
+
+            int splitMin = availableRequests / 2;
+            int splitMax = ((availableRequests % 2) == 1) ? splitMin + 1 : splitMin;
             this.logger.log(Level.TRACE, "Load balancing sharded reads amongs memcached servers.");
             result.merge(min.getKey(), splitMin, Integer::sum);
             result.merge(max.getKey(), splitMax, Integer::sum);
@@ -563,7 +573,7 @@ public final class Worker implements Callable<Object> {
             if (arrayEntry.get(0).getValue() > arrayEntry.get(1).getValue()) {
                 temp = arrayEntry.get(0);
                 arrayEntry.set(0, arrayEntry.get(1));
-                arrayEntry.set(0, temp);
+                arrayEntry.set(1, temp);
             }
 
             max = arrayEntry.get(2);
@@ -605,7 +615,7 @@ public final class Worker implements Callable<Object> {
                 splitMin = splitMid = availableRequests / 3 + 1;
                 splitMax = splitMin - 1;
             }
-            this.logger.log(Level.TRACE, "Load balancing sharded reads amongs memcached servers.");
+            this.logger.log(Level.TRACE, "Load balancing sharded reads amongst memcached servers.");
             result.merge(min.getKey(), splitMin, Integer::sum);
             result.merge(mid.getKey(), splitMid, Integer::sum);
             result.merge(max.getKey(), splitMax, Integer::sum);

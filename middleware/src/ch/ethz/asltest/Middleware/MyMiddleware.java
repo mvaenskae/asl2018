@@ -105,11 +105,15 @@ public final class MyMiddleware implements Runnable {
                     SelectionKey key = iter.next();
                     iter.remove();
 
-                    if (key.isValid() && key.isAcceptable()) {
+                    if (!key.isValid()) {
+                        continue;
+                    }
+
+                    if (key.isAcceptable()) {
                         register(selector, this.serverChannel);
                     }
 
-                    if (key.isValid() && key.isReadable()) {
+                    if (key.isReadable()) {
                         List<WorkUnit> completeRequest = ((PacketParser) key.attachment()).receiveAndParse(key);
                         if (completeRequest != null && completeRequest.size() > 0) {
                             for (WorkUnit wu : completeRequest) {
@@ -142,7 +146,6 @@ public final class MyMiddleware implements Runnable {
                 this.workerThreads.shutdownNow();
             }
         } catch (InterruptedException e) {
-            e.printStackTrace();
             this.workerThreads.shutdownNow();
         }
 
