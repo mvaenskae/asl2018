@@ -1,26 +1,24 @@
-package ch.ethz.asltest.Utilities.WorkUnit;
+package ch.ethz.asltest.Utilities.Packets.WorkUnit;
 
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class WorkUnitSet extends WorkUnit {
+public final class WorkUnitValue extends WorkUnit {
     /**
-     * SET: SET the value of the specific key.
+     * VALUE: Expected reply for each <key> in GET.
      * <p></p>
-     * set <key> <flags> <exptime> <bytes> [noreply]\r\n
+     * VALUE <key> <flags> <bytes> [<cas_unique>]\r\n
      * <data block>\r\n
      * <p></p>
      * <key> Maximum size of 250 Bytes
      * <flags> Either 16 or 32 bits (use 16 here for legacy)
-     * <exptime> Maximum of 60*60*24*30 (30 days; else UNIX timestamp)
      * <bytes> Gives length of payload EXCLUDING \r\n (so 2 more Bytes here!)
-     * noreply Commands the server to not send a reply (IGNORE THIS FOR ASL!)
+     * <cas_unique> Unique 64-bit integer for the item
      */
 
     public final byte[] key;
     public final byte[] flags;
-    public final byte[] exptime;
     public final int bytes;
 
     public final byte[] header;
@@ -28,15 +26,14 @@ public final class WorkUnitSet extends WorkUnit {
 
     public final List<Integer> whitespaces;
 
-    public WorkUnitSet(SocketChannel client, byte[] header, ArrayList<byte[]> contents, ArrayList<Integer> whitespace)
+    public WorkUnitValue(SocketChannel client, byte[] header, ArrayList<byte[]> contents, ArrayList<Integer> whitespace)
     {
         super(client);
-        this.type = WorkUnitType.SET;
+        this.type = WorkUnitType.VALUE;
         this.header = header;
         this.key = contents.get(0);
         this.flags = contents.get(1);
-        this.exptime = contents.get(2);
-        this.bytes = Integer.parseInt(new String(contents.get(3)));
+        this.bytes = Integer.parseInt(new String(contents.get(2)));
         this.whitespaces = whitespace;
     }
 

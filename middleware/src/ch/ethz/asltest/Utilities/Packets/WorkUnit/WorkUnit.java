@@ -1,6 +1,6 @@
-package ch.ethz.asltest.Utilities.WorkUnit;
+package ch.ethz.asltest.Utilities.Packets.WorkUnit;
 
-import ch.ethz.asltest.Utilities.Timestamps;
+import ch.ethz.asltest.Utilities.Packets.Timestamps;
 
 import java.nio.channels.SocketChannel;
 
@@ -18,9 +18,14 @@ public abstract class WorkUnit {
 
     WorkUnit(SocketChannel originalSocket)
     {
-        // TODO: Fix this timestamp here, it's semanticaly incorrect
-        this.timestamp = new Timestamps(0);
         this.sendBackTo = originalSocket;
+        this.timestamp = new Timestamps(0);
+    }
+
+    WorkUnit(SocketChannel originalSocket, long arrivedOnSocket)
+    {
+        this.sendBackTo = originalSocket;
+        this.timestamp = new Timestamps(arrivedOnSocket);
     }
 
     public abstract byte[] getHeader();

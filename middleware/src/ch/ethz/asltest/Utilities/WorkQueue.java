@@ -1,34 +1,48 @@
 package ch.ethz.asltest.Utilities;
 
-import ch.ethz.asltest.Utilities.WorkUnit.WorkUnit;
+import ch.ethz.asltest.Utilities.Statistics.Containers.QueueStatistics;
+import ch.ethz.asltest.Utilities.Packets.WorkUnit.WorkUnit;
 
 import java.util.concurrent.ArrayBlockingQueue;
 
 public final class WorkQueue {
     private final ArrayBlockingQueue<WorkUnit> workUnits;
+    public final QueueStatistics queueStatistics;
 
     public WorkQueue(int size)
     {
         this.workUnits = new ArrayBlockingQueue<>(size);
-    }
-
-    public int getSize()
-    {
-        return this.workUnits.size();
+        this.queueStatistics = new QueueStatistics(this);
     }
 
     public WorkUnit get() throws InterruptedException
     {
-        return this.workUnits.take();
+        WorkUnit temp = this.workUnits.take();
+        synchronized (queueStatistics) {
+            long gotFromQueue = System.nanoTime();
+            temp.timestamp.setPopFromQueue(gotFromQueue);
+            this.queueStatistics.poppedElement(gotFromQueue);
+            return temp;
+        }
     }
 
     public void put(WorkUnit unit) throws InterruptedException
     {
         this.workUnits.put(unit);
+        synchronized (queueStatistics) {
+            long putOnQueue = System.nanoTime();
+            unit.timestamp.setPushOnQueue(putOnQueue);
+            this.queueStatistics.pushedElement(putOnQueue);
+        }
     }
 
     public boolean isEmpty()
     {
         return this.workUnits.isEmpty();
+    }
+
+    public int getSize()
+    {
+        return this.workUnits.size();
     }
 }

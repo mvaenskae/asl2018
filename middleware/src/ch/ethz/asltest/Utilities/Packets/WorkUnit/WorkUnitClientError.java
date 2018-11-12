@@ -1,4 +1,4 @@
-package ch.ethz.asltest.Utilities.WorkUnit;
+package ch.ethz.asltest.Utilities.Packets.WorkUnit;
 
 import java.nio.channels.SocketChannel;
 

@@ -1,10 +1,10 @@
-package ch.ethz.asltest.Utilities;
+package ch.ethz.asltest.Utilities.Packets;
 
 public final class Timestamps {
 
     private long arrivedOnSocket;
-    private long putOnQueue;
-    private long gotFromQueue;
+    private long pushOnQueue;
+    private long popFromQueue;
     private long queryToMemcached;
     private long replyFromMemcached;
 
@@ -23,24 +23,24 @@ public final class Timestamps {
         this.arrivedOnSocket = arrivedOnSocket;
     }
 
-    public long getPutOnQueue()
+    public long getPushOnQueue()
     {
-        return putOnQueue;
+        return pushOnQueue;
     }
 
-    public void setPutOnQueue(long putOnQueue)
+    public void setPushOnQueue(long pushOnQueue)
     {
-        this.putOnQueue = putOnQueue;
+        this.pushOnQueue = pushOnQueue;
     }
 
-    public long getGotFromQueue()
+    public long getPopFromQueue()
     {
-        return gotFromQueue;
+        return popFromQueue;
     }
 
-    public void setGotFromQueue(long gotFromQueue)
+    public void setPopFromQueue(long popFromQueue)
     {
-        this.gotFromQueue = gotFromQueue;
+        this.popFromQueue = popFromQueue;
     }
 
     public long getQueryToMemcached()

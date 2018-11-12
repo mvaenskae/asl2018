@@ -1,7 +1,7 @@
-package ch.ethz.asltest.Utilities;
+package ch.ethz.asltest.Utilities.Packets;
 
 import ch.ethz.asltest.Utilities.Misc.Tuple;
-import ch.ethz.asltest.Utilities.WorkUnit.*;
+import ch.ethz.asltest.Utilities.Packets.WorkUnit.*;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -72,6 +72,7 @@ public final class PacketParser {
     public List<WorkUnit> receiveAndParse(SelectionKey key)
     {
         this.client = (SocketChannel) key.channel();
+        long dataReceived = System.nanoTime();
 
         WorkUnit temp;
         boolean hasMore = false;
@@ -79,7 +80,7 @@ public final class PacketParser {
 
         while (true) {
             try {
-                temp = internalParsing(hasMore);
+                temp = internalParsing(hasMore, dataReceived);
             } catch (IOException e) {
                 this.logger.log(Level.ERROR, "Unexpected problems with this channel, flushing ByteBuffer.");
                 this.logger.log(Level.ERROR, e.getMessage());
@@ -105,7 +106,7 @@ public final class PacketParser {
      * indicate the stream has currently been exhausted and needs to receive new data.
      * @return A complete workUnit on successful parsing, else throws an IOException
      */
-    private WorkUnit internalParsing(boolean hasMore) throws IOException
+    private WorkUnit internalParsing(boolean hasMore,  long packetReceived) throws IOException
     {
         // If a packet has been parsed and the buffer has been compacted, maybe it would be beneficial to try and fill
         // up any remaining NIC-bound data...
@@ -142,6 +143,9 @@ public final class PacketParser {
         if (headerFound && !headerParsed) {
             // Header fully received, parse it
             this.parseHeader(lineReadOffset);
+            if (this.workUnit != null && this.workUnit.timestamp.getArrivedOnSocket() == 0) {
+                this.workUnit.timestamp.setArrivedOnSocket(packetReceived);
+            }
         }
 
         if (headerFound && headerParsed && hasBody) {

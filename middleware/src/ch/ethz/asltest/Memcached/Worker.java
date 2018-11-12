@@ -1,9 +1,12 @@
 package ch.ethz.asltest.Memcached;
 
 import ch.ethz.asltest.Utilities.Misc.MiscHelper;
-import ch.ethz.asltest.Utilities.PacketParser;
+import ch.ethz.asltest.Utilities.Packets.PacketParser;
+import ch.ethz.asltest.Utilities.Statistics.Containers.WorkerStatistics;
+import ch.ethz.asltest.Utilities.Statistics.StatisticsElement.WorkerElement;
+import ch.ethz.asltest.Utilities.Statistics.StatisticsElement.WorkerElementSet;
 import ch.ethz.asltest.Utilities.WorkQueue;
-import ch.ethz.asltest.Utilities.WorkUnit.*;
+import ch.ethz.asltest.Utilities.Packets.WorkUnit.*;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,36 +23,36 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
-public final class Worker implements Callable<Object> {
+public final class Worker implements Callable<WorkerStatistics> {
 
     // Static fields shared by all workers
-    private final static AtomicBoolean stopFlag = new AtomicBoolean();
-    private static WorkQueue workQueue;
-    private static List<InetSocketAddress> memcachedServers;
-    private static boolean isSharded;
+    private final static AtomicBoolean stopFlag = new AtomicBoolean(); // stops the instance (if true)
+    private static WorkQueue workQueue; // reference to queue from which to pop memtier requests from
+    private static List<InetSocketAddress> memcachedServers; // list of all memcached servers
+    private static boolean isSharded; // boolean which sets the memcached selector to sharded reads (if true)
 
     // Instance-based fields
-    private final Logger logger;
-    private final int id;
+    private final Logger logger; // local logging reference
+    private final int id; // id of instance
 
-    // Initialized by static properties
-    private final Map<String, PacketParser> packetParsers = new HashMap<>(memcachedServers.size());
-    private final Map<SelectionKey, Integer> fairnessMap = new HashMap<>(memcachedServers.size());
+    // Instance-local fields, initialized at compile-time
+    public final WorkerStatistics workerStats = new WorkerStatistics();
+    private final Map<String, PacketParser> packetParsers = new HashMap<>(memcachedServers.size()); // map of packet parsers bound to each communicating party (required for attachment purposes and limiting object trashing
+    private final Map<SelectionKey, Integer> fairnessMap = new HashMap<>(memcachedServers.size()); // map keeping track of usage per server
 
-    // Initialized variably
-    private WorkUnit workItem;
-    private Selector memcachedSelector;
-    private Selector memtierSelector;
+    // Instance-local fields, initialized at run-time
+    private WorkUnit workItem; // reference to local request to be handled
+    private Selector memcachedSelector; // selector used for selecting active keys for communicating with servers
+    private Selector memtierSelector; // selector used for selecting active keys for communicating with clients
+    private WorkerElement workerElement; // reference to be used for storing current memtier's request/reply statistics
 
-    private int invalidHeaders = 0;
-
+    // TODO: Refactor these fields to really only be used correctly per each instance
+    private int invalidHeaders = 0; // local counter for number of invalid headers
     private int[] sendCounters = new int[Worker.memcachedServers.size()];
-
-    // Local fields for statistics
     private int getCounter = 0;
     private int setCounter = 0;
 
-    private final WorkerStats workerStats = new WorkerStats();
+    // Static Methods
 
     /**
      * Sets the workQueue statically which instances are referring to.
@@ -82,6 +85,17 @@ public final class Worker implements Callable<Object> {
     }
 
     /**
+     * Set the status of the stopFlag (which will stop the thread from popping any requests from the workqueue.
+     * @param isStopped Should workers stop accepting new units of work?
+     */
+    public static void setStopFlag(final boolean isStopped)
+    {
+        stopFlag.set(isStopped);
+    }
+
+    // Constructor
+
+    /**
      * Empty instantiation procedure, currently does nothing really...
      */
     public Worker(final int i)
@@ -90,8 +104,10 @@ public final class Worker implements Callable<Object> {
         this.logger = LogManager.getLogger(Worker.class + "-" + i);
     }
 
+    // Instance methods
+
     @Override
-    public Object call() throws IOException
+    public WorkerStatistics call() throws IOException
     {
         try {
             this.initWorkTask();
@@ -104,6 +120,7 @@ public final class Worker implements Callable<Object> {
         try {
             while (!stopFlag.get()) {
                 this.workItem = Worker.workQueue.get();
+                this.workItem.timestamp.setPopFromQueue(System.nanoTime());
                 switch (this.workItem.type) {
                     case SET:
                         this.logger.log(Level.INFO, "Got 'set' from queue.");
@@ -115,7 +132,7 @@ public final class Worker implements Callable<Object> {
                         break;
                     case INVALID:
                         this.logger.log(Level.INFO, "Invalid request on the queue.");
-                        ++invalidHeaders;
+                        // this.workerStats.invalidPacketCounter();
                         // Fallthrough
                     default:
                         break;
@@ -132,8 +149,8 @@ public final class Worker implements Callable<Object> {
             this.memcachedSelector.close();
         }
 
-        //TODO: Here generate statistics and return them in an object/struct/whatevs
-        return null;
+        // this.workerStats.accumulate();
+        return this.workerStats;
     }
 
     private void handleGetRequest() throws IOException
@@ -235,6 +252,8 @@ public final class Worker implements Callable<Object> {
      */
     private void handleSetRequest() throws IOException
     {
+        //this.workerElement = new WorkerElementSet();
+
         // TODO: Logging here
         this.workItem.sendBackTo.register(this.memtierSelector, SelectionKey.OP_WRITE);
         WorkUnitSet setRequest = (WorkUnitSet) this.workItem;
@@ -314,6 +333,9 @@ public final class Worker implements Callable<Object> {
             }
         }
 
+        long roundTripTime = System.nanoTime() - this.workItem.timestamp.getArrivedOnSocket();
+        //this.workerStats.putIntoHistogram(roundTripTime);
+
         removeFromInterestSet(sKeyUsed, SelectionKey.OP_WRITE);
     }
 
@@ -331,6 +353,7 @@ public final class Worker implements Callable<Object> {
     private List<WorkUnit> memcachedCommunication(WorkUnitType type, Map<SelectionKey, List<ByteBuffer>> toSend, Map<SelectionKey, Integer> expectedResponsesCount) throws IOException
     {
         // TODO: Logging here
+        this.workItem.timestamp.setQueryToMemcached(System.nanoTime());
         int numberOfResponses = expectedResponsesCount.values().stream().mapToInt(i -> i.intValue()).sum();
 
         List<WorkUnit> result = new ArrayList<>(numberOfResponses);
@@ -392,6 +415,7 @@ public final class Worker implements Callable<Object> {
             }
         }
 
+        this.workItem.timestamp.setReplyFromMemcached(System.nanoTime());
         return result;
     }
 

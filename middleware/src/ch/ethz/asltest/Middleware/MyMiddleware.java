@@ -2,9 +2,14 @@ package ch.ethz.asltest.Middleware;
 
 import ch.ethz.asltest.Memcached.Worker;
 import ch.ethz.asltest.Utilities.Misc.IPPair;
-import ch.ethz.asltest.Utilities.PacketParser;
+import ch.ethz.asltest.Utilities.Statistics.Containers.MiddlewareStatistics;
+import ch.ethz.asltest.Utilities.Packets.PacketParser;
+import ch.ethz.asltest.Utilities.Statistics.Containers.QueueStatistics;
+import ch.ethz.asltest.Utilities.Statistics.Containers.WorkerStatistics;
+import ch.ethz.asltest.Utilities.Statistics.Handlers.QueueHandler;
 import ch.ethz.asltest.Utilities.WorkQueue;
-import ch.ethz.asltest.Utilities.WorkUnit.WorkUnit;
+import ch.ethz.asltest.Utilities.Packets.WorkUnit.WorkUnit;
+import ch.ethz.asltest.Utilities.Statistics.Handlers.WorkerHandler;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -17,6 +22,10 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,14 +35,15 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 
 public final class MyMiddleware implements Runnable {
 
-    // Consts
-    private final static int CLIENT_QUEUE_SIZE = 1000;
+    // Constants defining default program behavior
+    private final static int CLIENT_QUEUE_SIZE = 256;
     private final static int MAXIMUM_THREADS = 128;
+    private final String logDir = "mw-stats";
 
-    // Local objects
+    // Instance-bound default objects
     private static final Logger logger = LogManager.getLogger(MyMiddleware.class);
 
-    // Local fields
+    // Instance-bound fields which define the logic of the middleware
     public final AtomicBoolean atomicStopFlag = new AtomicBoolean(false);
     final private InetAddress ip;
     final private int port;
@@ -41,12 +51,20 @@ public final class MyMiddleware implements Runnable {
     final private int numThreadPoolThreads;
     final private boolean isShardedRead;
 
+    // Instance-bound references to objects created by the middleware
     private WorkQueue clientQueue;
     private ExecutorService workerThreads;
-
+    private ArrayList<Worker> workerList;
     private Selector selector;
     private ServerSocketChannel serverChannel;
-    private ArrayList<Future<Object>> workerResults;
+
+    // Instance-bound references to statistics instrumentation
+    private final ScheduledThreadPoolExecutor statisticsThreads = new ScheduledThreadPoolExecutor(2);
+    private QueueHandler queueHandler;
+    private WorkerHandler workerHandler;
+    private ArrayList<Future<WorkerStatistics>> workerResults;
+    WorkerStatistics mergedWorkerStatistics = new WorkerStatistics();
+    QueueStatistics queueStatistics;
 
 
     /**
@@ -85,6 +103,7 @@ public final class MyMiddleware implements Runnable {
     @Override
     public void run()
     {
+        boolean firstPacket = true;
         try {
             initNioMiddleware();
         } catch (IOException e) {
@@ -116,8 +135,14 @@ public final class MyMiddleware implements Runnable {
                     if (key.isReadable()) {
                         List<WorkUnit> completeRequest = ((PacketParser) key.attachment()).receiveAndParse(key);
                         if (completeRequest != null && completeRequest.size() > 0) {
+                            if (firstPacket) {
+                                firstPacket = false;
+                                MiddlewareStatistics.enableStatistics();
+                                this.queueStatistics = this.clientQueue.queueStatistics;
+                            }
                             for (WorkUnit wu : completeRequest) {
                                 this.clientQueue.put(wu);
+                                wu.timestamp.setPushOnQueue(System.nanoTime());
                             }
                         }
                     }
@@ -139,6 +164,9 @@ public final class MyMiddleware implements Runnable {
             // Busyspin here
         }
 
+        // Workers don't accept new elements from the queue -- all workers will be interrupted by design
+        Worker.setStopFlag(true);
+
         // Shut down the threadpool
         this.workerThreads.shutdown();
         try {
@@ -149,13 +177,33 @@ public final class MyMiddleware implements Runnable {
             this.workerThreads.shutdownNow();
         }
 
-        // Get results from each thread and generate final results
-        for (Future<Object> workResult :
-                this.workerResults) {
-            // TODO: Merge results from threads here
+        this.queueStatistics.stopQueue();
+        MiddlewareStatistics.disableStatistics();
+        // TODO: Also on WorkerStatistics
+
+        this.statisticsThreads.shutdown();
+        try {
+            if (!this.statisticsThreads.awaitTermination(10, TimeUnit.SECONDS)) {
+                this.statisticsThreads.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            this.statisticsThreads.shutdownNow();
         }
 
-        // TODO: Return merged results via stdout (and logging)
+        // Get results from each thread and generate final results
+/*        for (Future<WorkerStatistics> workResult : this.workerResults) {
+            try {
+                this.mergedWorkerStatistics.add(workResult.get(10, TimeUnit.SECONDS));
+            } catch (InterruptedException | TimeoutException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }*/
+
+        try {
+            printMiddlewareStatistics(Paths.get(System.getProperty("user.home"), this.logDir));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -174,7 +222,6 @@ public final class MyMiddleware implements Runnable {
         client.setOption(TCP_NODELAY, true);
         client.register(selector, SelectionKey.OP_READ, new PacketParser(client.getRemoteAddress().toString()));
     }
-
 
     /**
      * Initialize the middleware's networking layer based on Java NIO (sockets bound, no services running).
@@ -201,12 +248,47 @@ public final class MyMiddleware implements Runnable {
         Worker.setIsSharded(this.isShardedRead);
 
         this.workerThreads = Executors.newFixedThreadPool(this.numThreadPoolThreads);
-        //Collection<Callable<Object>> workers = new ArrayList<>(this.numThreadPoolThreads);
         this.workerResults = new ArrayList<>(this.numThreadPoolThreads);
+        this.workerList = new ArrayList<>(this.numThreadPoolThreads);
         for (int i = 0; i < this.numThreadPoolThreads; i++) {
             Worker temp = new Worker(i);
-            //workers.add(temp);
+            workerList.add(temp);
             this.workerResults.add(this.workerThreads.submit(temp));
         }
+    }
+
+    /**
+     * Enable the instrumentation to generate performance statistics of the middleware.
+     * @param enableHandlers Should the performance statistics handlers be enabled immediately to run?
+     */
+    private void initMiddlewareStatistics(boolean enableHandlers)
+    {
+        MiddlewareStatistics.enableStatistics();
+        this.queueStatistics = this.clientQueue.queueStatistics;
+        /*this.queueHandler = new QueueHandler(this.clientQueue);
+        this.workerHandler = new WorkerHandler(this.workerList);
+
+        if (enableHandlers) {
+            this.queueHandler.enable();
+            this.workerHandler.enable();
+        }
+
+        this.statisticsThreads.scheduleAtFixedRate(queueHandler, 0, MiddlewareStatistics.TIME_INTERVAL, MiddlewareStatistics.TIME_UNIT);
+        this.statisticsThreads.scheduleAtFixedRate(workerHandler, 0, MiddlewareStatistics.TIME_INTERVAL, MiddlewareStatistics.TIME_UNIT);
+        */
+    }
+
+    private void printMiddlewareStatistics(Path directoryPath) throws IOException
+    {
+        if (!Files.exists(directoryPath, LinkOption.NOFOLLOW_LINKS)) {
+            Files.createDirectory(directoryPath);
+        }
+
+        StringBuilder temp = new StringBuilder();
+        this.queueStatistics.getWindowAverages().forEach(item -> temp.append(item + "\n"));
+        byte[] tempBytes = temp.toString().getBytes();
+        Path queueStatisticsPath = Paths.get(directoryPath.toString(), "queue_statistics.txt");
+        Path queueStatisticsFile = Files.createFile(queueStatisticsPath);
+        Files.write(queueStatisticsFile, tempBytes);
     }
 }
