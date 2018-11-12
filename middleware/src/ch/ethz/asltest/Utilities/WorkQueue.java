@@ -18,20 +18,20 @@ public final class WorkQueue {
     public WorkUnit get() throws InterruptedException
     {
         WorkUnit temp = this.workUnits.take();
+        long gotFromQueue = System.nanoTime();
+        temp.timestamp.setPopFromQueue(gotFromQueue);
         synchronized (queueStatistics) {
-            long gotFromQueue = System.nanoTime();
-            temp.timestamp.setPopFromQueue(gotFromQueue);
             this.queueStatistics.poppedElement(gotFromQueue);
-            return temp;
         }
+        return temp;
     }
 
     public void put(WorkUnit unit) throws InterruptedException
     {
         this.workUnits.put(unit);
+        long putOnQueue = System.nanoTime();
+        unit.timestamp.setPushOnQueue(putOnQueue);
         synchronized (queueStatistics) {
-            long putOnQueue = System.nanoTime();
-            unit.timestamp.setPushOnQueue(putOnQueue);
             this.queueStatistics.pushedElement(putOnQueue);
         }
     }

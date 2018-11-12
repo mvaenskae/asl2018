@@ -42,7 +42,7 @@ abstract public class MiddlewareStatistics {
 
     private void updateSecond()
     {
-        ++secondCounter;
+        secondCounter += TIME_INTERVAL;
     }
 
     private long diffToCurrentSecond(long timestamp)
@@ -74,6 +74,6 @@ abstract public class MiddlewareStatistics {
 
     boolean timestampWithinCurrentSecond(long timestamp)
     {
-        return diffToCurrentSecond(timestamp) < NANOS_TO_SECOND;
+        return diffToCurrentSecond(timestamp) < TIME_INTERVAL * NANOS_TO_SECOND;
     }
 }
