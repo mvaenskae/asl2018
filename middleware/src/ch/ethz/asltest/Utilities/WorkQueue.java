@@ -1,39 +1,30 @@
 package ch.ethz.asltest.Utilities;
 
-import ch.ethz.asltest.Utilities.Statistics.Containers.QueueStatistics;
+import ch.ethz.asltest.Utilities.Statistics.Containers.AverageIntegerStatistics;
 import ch.ethz.asltest.Utilities.Packets.WorkUnit.WorkUnit;
 
 import java.util.concurrent.ArrayBlockingQueue;
 
 public final class WorkQueue {
     private final ArrayBlockingQueue<WorkUnit> workUnits;
-    public final QueueStatistics queueStatistics;
+    public final AverageIntegerStatistics queueStatistics = new AverageIntegerStatistics();
 
     public WorkQueue(int size)
     {
         this.workUnits = new ArrayBlockingQueue<>(size);
-        this.queueStatistics = new QueueStatistics(this);
     }
 
     public WorkUnit get() throws InterruptedException
     {
-        WorkUnit temp = this.workUnits.take();
-        long gotFromQueue = System.nanoTime();
-        temp.timestamp.setPopFromQueue(gotFromQueue);
-        synchronized (queueStatistics) {
-            this.queueStatistics.poppedElement(gotFromQueue);
-        }
-        return temp;
+        WorkUnit item = this.workUnits.take();
+        updateStatistics(item);
+        return item;
     }
 
     public void put(WorkUnit unit) throws InterruptedException
     {
         this.workUnits.put(unit);
-        long putOnQueue = System.nanoTime();
-        unit.timestamp.setPushOnQueue(putOnQueue);
-        synchronized (queueStatistics) {
-            this.queueStatistics.pushedElement(putOnQueue);
-        }
+        updateStatistics(unit);
     }
 
     public boolean isEmpty()
@@ -41,8 +32,12 @@ public final class WorkQueue {
         return this.workUnits.isEmpty();
     }
 
-    public int getSize()
+    private void updateStatistics(WorkUnit item)
     {
-        return this.workUnits.size();
+        synchronized (queueStatistics) {
+            long timestamp = System.nanoTime();
+            item.timestamp.setPopFromQueue(timestamp);
+            this.queueStatistics.addElement(timestamp, this.workUnits.size());
+        }
     }
 }

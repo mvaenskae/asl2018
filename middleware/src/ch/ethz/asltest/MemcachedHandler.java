@@ -1,10 +1,10 @@
-package ch.ethz.asltest.Memcached;
+package ch.ethz.asltest;
 
 import ch.ethz.asltest.Utilities.Misc.MiscHelper;
+import ch.ethz.asltest.Utilities.Misc.Tuple;
 import ch.ethz.asltest.Utilities.Packets.PacketParser;
 import ch.ethz.asltest.Utilities.Statistics.Containers.WorkerStatistics;
-import ch.ethz.asltest.Utilities.Statistics.StatisticsElement.WorkerElement;
-import ch.ethz.asltest.Utilities.Statistics.StatisticsElement.WorkerElementSet;
+import ch.ethz.asltest.Utilities.Statistics.Element.WorkerElement;
 import ch.ethz.asltest.Utilities.WorkQueue;
 import ch.ethz.asltest.Utilities.Packets.WorkUnit.*;
 import org.apache.logging.log4j.Level;
@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.net.StandardSocketOptions.TCP_NODELAY;
 
-public final class Worker implements Callable<WorkerStatistics> {
+public final class MemcachedHandler implements Callable<WorkerStatistics> {
 
     // Static fields shared by all workers
     private final static AtomicBoolean stopFlag = new AtomicBoolean(); // stops the instance (if true)
@@ -46,12 +46,6 @@ public final class Worker implements Callable<WorkerStatistics> {
     private Selector memtierSelector; // selector used for selecting active keys for communicating with clients
     private WorkerElement workerElement; // reference to be used for storing current memtier's request/reply statistics
 
-    // TODO: Refactor these fields to really only be used correctly per each instance
-    private int invalidHeaders = 0; // local counter for number of invalid headers
-    private int[] sendCounters = new int[Worker.memcachedServers.size()];
-    private int getCounter = 0;
-    private int setCounter = 0;
-
     // Static Methods
 
     /**
@@ -61,7 +55,7 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     public static void setWorkQueue(final WorkQueue queue)
     {
-        Worker.workQueue = queue;
+        MemcachedHandler.workQueue = queue;
     }
 
     /**
@@ -71,7 +65,7 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     public static void setMemcachedServers(final List<InetSocketAddress> memcachedServers)
     {
-        Worker.memcachedServers = memcachedServers;
+        MemcachedHandler.memcachedServers = memcachedServers;
     }
 
     /**
@@ -81,7 +75,7 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     public static void setIsSharded(final boolean isSharded)
     {
-        Worker.isSharded = isSharded;
+        MemcachedHandler.isSharded = isSharded;
     }
 
     /**
@@ -98,10 +92,10 @@ public final class Worker implements Callable<WorkerStatistics> {
     /**
      * Empty instantiation procedure, currently does nothing really...
      */
-    public Worker(final int i)
+    public MemcachedHandler(final int i)
     {
         this.id = i;
-        this.logger = LogManager.getLogger(Worker.class + "-" + i);
+        this.logger = LogManager.getLogger(MemcachedHandler.class + "-" + i);
     }
 
     // Instance methods
@@ -112,34 +106,46 @@ public final class Worker implements Callable<WorkerStatistics> {
         try {
             this.initWorkTask();
         } catch (Exception e) {
-            this.logger.fatal("Couldn't initialize worker. Will stop execution on it...");
-            this.logger.error(e.getMessage());
+            logger.log(Level.FATAL, "MAIN: Couldn't initialize worker. Will stop execution on it...");
+            logger.log(Level.ERROR, e.getMessage());
             return null;
         }
 
         try {
             while (!stopFlag.get()) {
-                this.workItem = Worker.workQueue.get();
+                this.workItem = MemcachedHandler.workQueue.get();
                 this.workItem.timestamp.setPopFromQueue(System.nanoTime());
                 switch (this.workItem.type) {
                     case SET:
-                        this.logger.log(Level.INFO, "Got 'set' from queue.");
+                        this.workerStats.setElement.incrementOpCounter(this.workItem.timestamp.getPopFromQueue());
+                        this.workerStats.setElement.addAverageWaitingTimeQueue(this.workItem);
+                        this.logger.log(Level.INFO, "MAIN: Popped SET.");
                         this.handleSetRequest();
                         break;
                     case GET:
-                        this.logger.log(Level.INFO, "Got 'get' from queue.");
+                        int keyCount = ((WorkUnitGet) this.workItem).keys.size();
+                        if (keyCount > 1) {
+                            this.workerStats.multiGetElement.incrementOpCounter(this.workItem.timestamp.getPopFromQueue());
+                            this.workerStats.multiGetElement.addAverageWaitingTimeQueue(this.workItem);
+                            this.logger.log(Level.INFO, "MAIN: Popped multiGET ({}).", keyCount);
+                        } else {
+                            this.workerStats.getElement.incrementOpCounter(this.workItem.timestamp.getPopFromQueue());
+                            this.workerStats.getElement.addAverageWaitingTimeQueue(this.workItem);
+                            this.logger.log(Level.INFO, "MAIN: Popped GET.");
+                        }
                         this.handleGetRequest();
                         break;
                     case INVALID:
-                        this.logger.log(Level.INFO, "Invalid request on the queue.");
-                        // this.workerStats.invalidPacketCounter();
+                        this.workerStats.invalidPacketCounter(this.workItem.timestamp.getPopFromQueue());
+                        this.logger.log(Level.INFO, "MAIN: Popped INVALID.");
                         // Fallthrough
                     default:
+                        this.logger.log(Level.FATAL, "MAIN: Popped UNKNOWN!");
                         break;
                 }
             }
         } catch (InterruptedException e) {
-            this.logger.log(Level.INFO, "Worker {} was interrupted.", this.id);
+            this.logger.log(Level.INFO, "MAIN: Interrupted, finishing execution...");
         } finally {
             // Cleanup for thread termination
             for (SelectionKey sKey : this.memcachedSelector.keys()) {
@@ -147,102 +153,127 @@ public final class Worker implements Callable<WorkerStatistics> {
                 sKey.cancel();
             }
             this.memcachedSelector.close();
+            this.workerStats.stopStatistics();
         }
 
-        // this.workerStats.accumulate();
         return this.workerStats;
+    }
+
+    private Map<SelectionKey, Integer> generateShardedGetRequest(Map<SelectionKey, List<ByteBuffer>> requestMap)
+    {
+        logger.log(Level.DEBUG, "GET: Preparing sharded request for memcached.");
+        WorkUnitGet getRequest = (WorkUnitGet) this.workItem;
+
+        // Balance number of requests to send out
+        Map<SelectionKey, Integer> expectedResponseCount = this.loadBalancer(getRequest.keys.size());
+
+        /*
+         * Update fairness of memcached servers used, update number of expected responses from servers with "END"
+         * and generate a List of each memcached server's requests. Additionally only register relevant servers.
+         */
+        int iterator = 0;
+        for (Map.Entry<SelectionKey, Integer> entry : expectedResponseCount.entrySet()) {
+            ArrayList<ByteBuffer> request = new ArrayList<>(entry.getValue());
+            if (entry.getValue() != 0) {
+                request.add(ByteBuffer.wrap("get ".getBytes()));
+                addToInterestSet(entry.getKey(), SelectionKey.OP_WRITE);
+            }
+            for (int i = iterator; i < (entry.getValue() + iterator); ++i) {
+                if (i + 1 != (entry.getValue() + iterator)) {
+                    ByteBuffer temp = ByteBuffer.allocate(getRequest.keys.get(i).length + 1);
+                    temp.put(getRequest.keys.get(i)).put((byte) ' ');
+                    temp.flip();
+                    request.add(temp);
+                } else {
+                    ByteBuffer temp = ByteBuffer.allocate(getRequest.keys.get(i).length + 2);
+                    temp.put(getRequest.keys.get(i)).put((byte) '\r').put((byte) '\n');
+                    temp.flip();
+                    request.add(temp);
+                }
+            }
+            iterator += entry.getValue();
+            requestMap.put(entry.getKey(), request);
+
+            this.fairnessMap.merge(entry.getKey(), entry.getValue(), Integer::sum);
+            expectedResponseCount.merge(entry.getKey(), (entry.getValue() == 0) ? 0 : 1, Integer::sum);
+        }
+
+        logger.log(Level.DEBUG, "GET: Generated sharded request for memcached.");
+        return expectedResponseCount;
+    }
+
+    private Map<SelectionKey, Integer> generateGetRequest(Map<SelectionKey, List<ByteBuffer>> requestMap)
+    {
+        logger.log(Level.DEBUG, "GET: Preparing normal request for memcached.");
+        WorkUnitGet getRequest = (WorkUnitGet) this.workItem;
+
+        // Set the selected channel to writeable for the memcached server used
+        SelectionKey memcachedSocket = getNextServer();
+        addToInterestSet(memcachedSocket, SelectionKey.OP_WRITE);
+
+        // Put the number of expected reponses explicitly for each memcached server connected to
+        Map<SelectionKey, Integer> expectedResponseCount = new HashMap<>(MemcachedHandler.memcachedServers.size());
+        this.fairnessMap.keySet().forEach(sKey -> expectedResponseCount.put(sKey, 0));
+        expectedResponseCount.merge(memcachedSocket, getRequest.keys.size() + 1, Integer::sum);
+
+        // Update the load on the servers, assumes the requests will get through
+        this.fairnessMap.merge(memcachedSocket, getRequest.keys.size(), Integer::sum);
+
+        // Generate the request used for the memcached server
+        List <ByteBuffer> request = new ArrayList<>();
+        request.add(ByteBuffer.wrap(getRequest.header));
+
+        // Remember which server is to respond based on the SelectionKey and how much
+        requestMap.put(memcachedSocket, request);
+
+        logger.log(Level.DEBUG, "GET: Generated normal request for memcached.");
+        return expectedResponseCount;
     }
 
     private void handleGetRequest() throws IOException
     {
-        // TODO: Logging here
-        // TODO: Refactor this... *sigh*
         this.workItem.sendBackTo.register(this.memtierSelector, SelectionKey.OP_WRITE);
         Map<SelectionKey, Integer> expectedResponseCount;
-        WorkUnitGet getRequest = (WorkUnitGet) this.workItem;
-
         Map<SelectionKey, List<ByteBuffer>> requestMap = new HashMap<>();
-        List<ByteBuffer> request = new ArrayList<>();
 
-        if (Worker.isSharded) {
-            // Balance number of requests to send out
-            expectedResponseCount = this.loadBalancer(getRequest.keys.size());
-
-            /*
-             * Update fairness of memcached servers used, update number of expected responses from servers with "END"
-             * and generate a List of each memcached server's requests. Additionally only register relevant servers.
-             */
-            int iterator = 0;
-            for (Map.Entry<SelectionKey, Integer> entry : expectedResponseCount.entrySet()) {
-                request = new ArrayList<>(entry.getValue());
-                if (entry.getValue() != 0) {
-                    request.add(ByteBuffer.wrap("get ".getBytes()));
-                    addToInterestSet(entry.getKey(), SelectionKey.OP_WRITE);
-                }
-                for (int i = iterator; i < (entry.getValue() + iterator); ++i) {
-                    if (i + 1 != (entry.getValue() + iterator)) {
-                        ByteBuffer temp = ByteBuffer.allocate(getRequest.keys.get(i).length + 1);
-                        temp.put(getRequest.keys.get(i)).put((byte) ' ');
-                        temp.flip();
-                        request.add(temp);
-                    } else {
-                        ByteBuffer temp = ByteBuffer.allocate(getRequest.keys.get(i).length + 2);
-                        temp.put(getRequest.keys.get(i)).put((byte) '\r').put((byte) '\n');
-                        temp.flip();
-                        request.add(temp);
-                    }
-                }
-                iterator += entry.getValue();
-                requestMap.put(entry.getKey(), request);
-
-                this.fairnessMap.merge(entry.getKey(), entry.getValue(), Integer::sum);
-                expectedResponseCount.merge(entry.getKey(), (entry.getValue() == 0) ? 0 : 1, Integer::sum);
-            }
+        if (MemcachedHandler.isSharded) {
+            expectedResponseCount = generateShardedGetRequest(requestMap);
         } else {
-            // Set the selected channel to writeable for the memcached server used
-            SelectionKey memcachedSocket = getNextServer();
-            addToInterestSet(memcachedSocket, SelectionKey.OP_WRITE);
-
-            // Put the number of expected reponses explicitly for each memcached server connected to
-            expectedResponseCount = new HashMap<>(Worker.memcachedServers.size());
-            this.fairnessMap.keySet().forEach(sKey -> expectedResponseCount.put(sKey, 0));
-            expectedResponseCount.merge(memcachedSocket, getRequest.keys.size() + 1, Integer::sum);
-
-            // Update the load on the servers, assumes the requests will get through
-            this.fairnessMap.merge(memcachedSocket, getRequest.keys.size(), Integer::sum);
-
-            // Generate the request used for the memcached server
-            request.add(ByteBuffer.wrap(getRequest.header));
-            requestMap.put(memcachedSocket, request);
+            expectedResponseCount = generateGetRequest(requestMap);
         }
 
+        logger.log(Level.DEBUG, "GET: Sending request to memcached...");
         List<WorkUnit> replies = memcachedCommunication(WorkUnitType.GET, requestMap, expectedResponseCount);
-        request.clear();
+        logger.log(Level.DEBUG, "GET: Received reply, checking results.");
+        List<ByteBuffer> reply = new ArrayList<>();
 
         for (WorkUnit unit : replies) {
             switch (unit.type) {
                 case VALUE:
-                    request.add(ByteBuffer.wrap(unit.getHeader()));
-                    request.add(ByteBuffer.wrap(unit.getBody()));
+                    reply.add(ByteBuffer.wrap(unit.getHeader()));
+                    reply.add(ByteBuffer.wrap(unit.getBody()));
                     break;
                 case END:
                     break;
                 case INVALID:
-                    this.logger.log(Level.FATAL, "memcached returned invalid packet");
-                    request.clear();
-                    request.add(ByteBuffer.wrap(WorkUnitError.header));
-                    memtierCommunication(request);
+                    this.logger.log(Level.FATAL, "GET: memcached returned invalid packet.");
+                    reply.clear();
+                    reply.add(ByteBuffer.wrap(WorkUnitError.header));
+                    memtierCommunication(reply);
                     return;
                 default:
-                    request.clear();
-                    request.add(ByteBuffer.wrap(unit.getHeader()));
-                    memtierCommunication(request);
+                    this.logger.log(Level.ERROR, "GET: memcached didn't like the request.");
+                    reply.clear();
+                    reply.add(ByteBuffer.wrap(unit.getHeader()));
+                    memtierCommunication(reply);
                     return;
             }
         }
 
-        request.add(ByteBuffer.wrap(WorkUnitEnd.header));
-        memtierCommunication(request);
+        reply.add(ByteBuffer.wrap(WorkUnitEnd.header));
+        this.logger.log(Level.DEBUG, "GET: Processed reply for memtier.");
+        this.logger.log(Level.DEBUG, "GET: Sending reply for memtier.");
+        memtierCommunication(reply);
     }
 
     /**
@@ -252,13 +283,11 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     private void handleSetRequest() throws IOException
     {
-        //this.workerElement = new WorkerElementSet();
-
-        // TODO: Logging here
         this.workItem.sendBackTo.register(this.memtierSelector, SelectionKey.OP_WRITE);
         WorkUnitSet setRequest = (WorkUnitSet) this.workItem;
 
-        Map<SelectionKey, List<ByteBuffer>> requestMap = new HashMap<>(Worker.memcachedServers.size());
+        logger.log(Level.DEBUG, "SET: Preparing request for memcached.");
+        Map<SelectionKey, List<ByteBuffer>> requestMap = new HashMap<>(MemcachedHandler.memcachedServers.size());
 
         List<ByteBuffer> request = new ArrayList<>();
         request.add(ByteBuffer.wrap(setRequest.header));
@@ -268,14 +297,17 @@ public final class Worker implements Callable<WorkerStatistics> {
         this.fairnessMap.keySet().forEach(sKey -> requestMap.put(sKey, MiscHelper.shallowCopy(request)));
 
         // Number of expected reponses for each memcached server connected to and mark them all active
-        HashMap<SelectionKey, Integer> expectedResponseCount = new HashMap<>(Worker.memcachedServers.size());
+        HashMap<SelectionKey, Integer> expectedResponseCount = new HashMap<>(MemcachedHandler.memcachedServers.size());
         this.memcachedSelector.keys().forEach(sKey -> {
                     expectedResponseCount.put(sKey, 1);
                     addToInterestSet(sKey, SelectionKey.OP_WRITE);
                 }
         );
+        logger.log(Level.DEBUG, "SET: Generated request for memcached.");
 
+        logger.log(Level.DEBUG, "SET: Sending request to memcached...");
         List<WorkUnit> replies = memcachedCommunication(WorkUnitType.SET, requestMap, expectedResponseCount);
+        logger.log(Level.DEBUG, "SET: Received reply, checking results.");
         request.clear();
 
         for (WorkUnit unit : replies) {
@@ -283,11 +315,12 @@ public final class Worker implements Callable<WorkerStatistics> {
                 case STORED:
                     break;
                 case INVALID:
-                    this.logger.log(Level.FATAL, "memcached returned invalid request!");
+                    this.logger.log(Level.FATAL, "SET: memcached returned invalid packet.");
                     request.add(ByteBuffer.wrap(WorkUnitError.header));
                     memtierCommunication(request);
                     return;
                 default:
+                    this.logger.log(Level.ERROR, "SET: memcached didn't like the request.");
                     request.add(ByteBuffer.wrap(unit.getHeader()));
                     memtierCommunication(request);
                     return;
@@ -296,6 +329,8 @@ public final class Worker implements Callable<WorkerStatistics> {
 
         // We checked all headers to be of type WorkUnitStored, we definitely have one therefore.
         request.add(ByteBuffer.wrap(WorkUnitStored.header));
+        this.logger.log(Level.DEBUG, "SET: Processed reply for memtier.");
+        this.logger.log(Level.DEBUG, "SET: Sending reply for memtier.");
         memtierCommunication(request);
     }
 
@@ -309,10 +344,10 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     private void memtierCommunication(List<ByteBuffer> toSend) throws IOException
     {
-        // TODO: Logging here
         boolean responseSent = false;
         SelectionKey sKeyUsed = null;
 
+        this.logger.log(Level.DEBUG, "TIER: Sending to memtier...");
         while (!responseSent) {
             this.memtierSelector.select();
 
@@ -326,15 +361,30 @@ public final class Worker implements Callable<WorkerStatistics> {
                 if (key.isValid() && key.isWritable()) {
                     if (!(key.attachment() instanceof ArrayList)) {
                         key.attach(toSend);
+                        // Maybe use as start for communication? But pings should cover this...
                     }
                     responseSent = memtierWriteBytes((ArrayList<ByteBuffer>) key.attachment(), key);
                     sKeyUsed = key;
                 }
             }
         }
+        this.logger.log(Level.DEBUG, "TIER: Finished sending to memtier.");
 
-        long roundTripTime = System.nanoTime() - this.workItem.timestamp.getArrivedOnSocket();
-        //this.workerStats.putIntoHistogram(roundTripTime);
+        switch (workItem.type) {
+            case SET:
+                workerStats.setElement.addAverageRTT(workItem);
+                break;
+            case GET:
+                if (((WorkUnitGet) workItem).keys.size() > 1) {
+                    workerStats.multiGetElement.addAverageRTT(workItem);
+                } else {
+                    workerStats.getElement.addAverageRTT(workItem);
+                }
+                break;
+            default:
+                // Just for completeness sake -- this is dead code
+                break;
+        }
 
         removeFromInterestSet(sKeyUsed, SelectionKey.OP_WRITE);
     }
@@ -352,13 +402,16 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     private List<WorkUnit> memcachedCommunication(WorkUnitType type, Map<SelectionKey, List<ByteBuffer>> toSend, Map<SelectionKey, Integer> expectedResponsesCount) throws IOException
     {
-        // TODO: Logging here
-        this.workItem.timestamp.setQueryToMemcached(System.nanoTime());
-        int numberOfResponses = expectedResponsesCount.values().stream().mapToInt(i -> i.intValue()).sum();
+        int numberOfResponses = expectedResponsesCount.values().stream().mapToInt(Integer::intValue).sum();
 
         List<WorkUnit> result = new ArrayList<>(numberOfResponses);
         int actualResponseCount = 0;
 
+        HashMap<SelectionKey, Long> memcachedTimings = new HashMap<>();
+        HashMap<SelectionKey, Tuple<Long, Long>> memcachedDeltas = new HashMap<>();
+        boolean firstMessageStartedSending = false;
+
+        logger.log(Level.DEBUG, "CACHED: Sending to memcached...");
         while (actualResponseCount < numberOfResponses) {
             try {
                 this.memcachedSelector.select();
@@ -383,6 +436,14 @@ public final class Worker implements Callable<WorkerStatistics> {
                         if (!(key.attachment() instanceof ArrayList)) {
                             List<ByteBuffer> elementsToSend = toSend.get(key);
                             key.attach(elementsToSend);
+                            if (!firstMessageStartedSending) {
+                                firstMessageStartedSending = true;
+                                long timestamp = System.nanoTime();
+                                this.workItem.timestamp.setQueryToMemcached(timestamp);
+                                memcachedTimings.put(key, timestamp);
+                            } else {
+                                memcachedTimings.put(key, System.nanoTime());
+                            }
                         }
                         memcachedWriteBytes((List<ByteBuffer>) key.attachment(), key);
                     }
@@ -391,30 +452,69 @@ public final class Worker implements Callable<WorkerStatistics> {
                         List<WorkUnit> completeRequest = ((PacketParser) key.attachment()).receiveAndParse(key);
 
                         if (completeRequest != null) {
+                            long maybeFinished = System.nanoTime();
+
                             if (expectedResponsesCount.get(key) > 0 && expectedResponsesCount.get(key) - completeRequest.size() >= 0) {
                                 // Only add if our current expected is within range!
                                 expectedResponsesCount.put(key, expectedResponsesCount.get(key) - completeRequest.size());
                                 actualResponseCount += completeRequest.size();
                                 result.addAll(completeRequest);
+
                                 if (type == WorkUnitType.GET && expectedResponsesCount.get(key) > 0) {
                                     if (result.stream().anyMatch(unit -> unit.type == WorkUnitType.END)) {
+                                        // This memcached server will not serve any further responses. Some cache misses occurred.
+                                        long memcachedStarted = memcachedTimings.get(key);
+                                        memcachedDeltas.put(key, new Tuple<>(maybeFinished, maybeFinished - memcachedStarted));
+
+                                        workerStats.cacheMiss(maybeFinished, expectedResponsesCount.get(key));
                                         actualResponseCount += expectedResponsesCount.get(key);
                                         expectedResponsesCount.put(key, 0);
+
+                                        // Remove the key from the interest set as no further replies expected.
+                                        removeFromInterestSet(key, SelectionKey.OP_READ);
                                     }
+                                } else if (expectedResponsesCount.get(key) <= 0) {
+                                    // This memcached server will not serve any further responses. All responses have been sent.
+                                    long memcachedStarted = memcachedTimings.get(key);
+                                    memcachedDeltas.put(key, new Tuple<>(maybeFinished, maybeFinished - memcachedStarted));
+
+                                    // Remove the key from the interest set as no further replies expected.
+                                    removeFromInterestSet(key, SelectionKey.OP_READ);
                                 }
 
-                                this.logger.log(Level.DEBUG, "Reply from memcached server {} of {} replies.", ((SocketChannel) key.channel()).getRemoteAddress(), completeRequest.size());
-                                removeFromInterestSet(key, SelectionKey.OP_READ);
+                                if (actualResponseCount >= numberOfResponses) {
+                                    workItem.timestamp.setReplyFromMemcached(maybeFinished);
+                                }
+
+                                this.logger.log(Level.DEBUG, "CACHED: Reply from memcached-server {} of {} elements.", ((SocketChannel) key.channel()).getRemoteAddress(), completeRequest.size());
                             }
                         }
                     }
                 }
             } catch (IOException e) {
-                this.logger.log(Level.ERROR, "Communication failed with memcached.");
+                this.logger.log(Level.ERROR, "CACHED: Communication failure with memcached!");
                 throw e;
             }
+            this.logger.log(Level.DEBUG, "CACHED: Finished communication.");
         }
 
+        switch (workItem.type) {
+            case SET:
+                workerStats.setElement.addAverageServiceTimeMemcached(memcachedDeltas);
+                break;
+            case GET:
+                if (((WorkUnitGet) workItem).keys.size() > 1) {
+                    workerStats.multiGetElement.addAverageServiceTimeMemcached(memcachedDeltas);
+                } else {
+                    workerStats.getElement.addAverageServiceTimeMemcached(memcachedDeltas);
+                }
+                break;
+            default:
+                // Just for completeness sake -- this is dead code
+                break;
+        }
+
+        // TODO: Fix this timestamp here... it is completely incorrect :(
         this.workItem.timestamp.setReplyFromMemcached(System.nanoTime());
         return result;
     }
@@ -431,11 +531,12 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     private boolean memtierWriteBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
-        // TODO: Logging here
-        ByteBuffer buffer = writeBytes(toSend, key);
+        ByteBuffer buffer = sendBytes(toSend, key);
 
         if (toSend.isEmpty() && buffer != null && !buffer.hasRemaining()) {
             removeFromInterestSet(key, SelectionKey.OP_WRITE);
+            workItem.timestamp.setReplyOnSocket(System.nanoTime());
+            this.logger.log(Level.DEBUG, "TIER: Sent request to {}.", ((SocketChannel) key.channel()).getRemoteAddress());
             return true;
         }
         return false;
@@ -453,15 +554,14 @@ public final class Worker implements Callable<WorkerStatistics> {
      */
     private void memcachedWriteBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
-        // TODO: Logging here
-        ByteBuffer buffer = writeBytes(toSend, key);
+        ByteBuffer buffer = sendBytes(toSend, key);
 
         if (toSend.isEmpty() && buffer != null && !buffer.hasRemaining()) {
             // Everything has been sent at this point, reattach the key's packetParser.
             reattachPacketParser(key);
             removeFromInterestSet(key, SelectionKey.OP_WRITE);
             addToInterestSet(key, SelectionKey.OP_READ);
-            this.logger.log(Level.DEBUG, "Sent request to {}.", ((SocketChannel) key.channel()).getRemoteAddress());
+            this.logger.log(Level.DEBUG, "CACHED: Sent request to {}.", ((SocketChannel) key.channel()).getRemoteAddress());
         }
     }
 
@@ -475,9 +575,8 @@ public final class Worker implements Callable<WorkerStatistics> {
      * @param key Key on which to send.
      * @return Tuple of the state of this method.
      */
-    private ByteBuffer writeBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
+    private ByteBuffer sendBytes(List<ByteBuffer> toSend, SelectionKey key) throws IOException
     {
-        // TODO: Logging here
         ByteBuffer buffer = null;
         Iterator<ByteBuffer> iterator = toSend.iterator();
 
@@ -532,7 +631,7 @@ public final class Worker implements Callable<WorkerStatistics> {
             last = entry.getKey();
         }
 
-        this.logger.log(Level.ERROR, "Couldn't find minimum in Map of memcached servers. Getting some server.");
+        this.logger.log(Level.ERROR, "Couldn't find minimum in map of memcached servers. Choosing random server.");
         return last;
     }
 
@@ -543,13 +642,13 @@ public final class Worker implements Callable<WorkerStatistics> {
     private Map<SelectionKey, Integer> loadBalancer(int numberOfRequests)
     {
         int availableRequests = numberOfRequests;
-        HashMap<SelectionKey, Integer> result = new HashMap<>(Worker.memcachedServers.size());
+        HashMap<SelectionKey, Integer> result = new HashMap<>(MemcachedHandler.memcachedServers.size());
         this.fairnessMap.keySet().forEach(sKey -> result.put(sKey, 0));
 
-        if (Worker.memcachedServers.size() == 1) {
+        if (MemcachedHandler.memcachedServers.size() == 1) {
             SelectionKey temp = getNextServer();
             result.merge(temp, 1, Integer::sum);
-        } else if (Worker.memcachedServers.size() == 2) {
+        } else if (MemcachedHandler.memcachedServers.size() == 2) {
             Map.Entry<SelectionKey, Integer> min, max;
             ArrayList<Map.Entry<SelectionKey, Integer>> arrayEntry = new ArrayList<>(2);
             arrayEntry.addAll(this.fairnessMap.entrySet());
@@ -649,7 +748,7 @@ public final class Worker implements Callable<WorkerStatistics> {
     }
 
     /**
-     * Initializes each Worker such that it is ready for communication with the memcached servers.
+     * Initializes each MemcachedHandler such that it is ready for communication with the memcached servers.
      */
     private void initWorkTask() throws IOException
     {
@@ -662,7 +761,7 @@ public final class Worker implements Callable<WorkerStatistics> {
         this.memtierSelector = Selector.open();
         int interestSet = 0; // Per default we are not interested in anything for the registered SocketChannel
 
-        for (InetSocketAddress memcachedServer : Worker.memcachedServers) {
+        for (InetSocketAddress memcachedServer : MemcachedHandler.memcachedServers) {
             // Create a socketChannel that is already connected
             socketChannel = SocketChannel.open(memcachedServer);
             socketChannel.configureBlocking(false);

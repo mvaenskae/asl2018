@@ -7,6 +7,7 @@ public final class Timestamps {
     private long popFromQueue;
     private long queryToMemcached;
     private long replyFromMemcached;
+    private long replyOnSocket;
 
     public Timestamps(long ts)
     {
@@ -61,5 +62,15 @@ public final class Timestamps {
     public void setReplyFromMemcached(long replyFromMemcached)
     {
         this.replyFromMemcached = replyFromMemcached;
+    }
+
+    public long getReplyOnSocket()
+    {
+        return replyOnSocket;
+    }
+
+    public void setReplyOnSocket(long replyOnSocket)
+    {
+        this.replyOnSocket = replyOnSocket;
     }
 }

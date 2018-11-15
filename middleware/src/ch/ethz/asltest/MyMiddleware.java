@@ -1,15 +1,12 @@
-package ch.ethz.asltest.Middleware;
+package ch.ethz.asltest;
 
-import ch.ethz.asltest.Memcached.Worker;
 import ch.ethz.asltest.Utilities.Misc.IPPair;
-import ch.ethz.asltest.Utilities.Statistics.Containers.MiddlewareStatistics;
+import ch.ethz.asltest.Utilities.Statistics.Containers.AverageIntegerStatistics;
+import ch.ethz.asltest.Utilities.Statistics.MiddlewareStatistics;
 import ch.ethz.asltest.Utilities.Packets.PacketParser;
-import ch.ethz.asltest.Utilities.Statistics.Containers.QueueStatistics;
 import ch.ethz.asltest.Utilities.Statistics.Containers.WorkerStatistics;
-import ch.ethz.asltest.Utilities.Statistics.Handlers.QueueHandler;
 import ch.ethz.asltest.Utilities.WorkQueue;
 import ch.ethz.asltest.Utilities.Packets.WorkUnit.WorkUnit;
-import ch.ethz.asltest.Utilities.Statistics.Handlers.WorkerHandler;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -38,7 +35,7 @@ public final class MyMiddleware implements Runnable {
     // Constants defining default program behavior
     private final static int CLIENT_QUEUE_SIZE = 256;
     private final static int MAXIMUM_THREADS = 128;
-    private final String logDir = "mw-stats";
+    final static String logDir = "mw-stats";
 
     // Instance-bound default objects
     private static final Logger logger = LogManager.getLogger(MyMiddleware.class);
@@ -54,17 +51,13 @@ public final class MyMiddleware implements Runnable {
     // Instance-bound references to objects created by the middleware
     private WorkQueue clientQueue;
     private ExecutorService workerThreads;
-    private ArrayList<Worker> workerList;
     private Selector selector;
     private ServerSocketChannel serverChannel;
 
     // Instance-bound references to statistics instrumentation
-    private final ScheduledThreadPoolExecutor statisticsThreads = new ScheduledThreadPoolExecutor(2);
-    private QueueHandler queueHandler;
-    private WorkerHandler workerHandler;
+    private final WorkerStatistics mergedWorkerStatistics = new WorkerStatistics();
     private ArrayList<Future<WorkerStatistics>> workerResults;
-    WorkerStatistics mergedWorkerStatistics = new WorkerStatistics();
-    QueueStatistics queueStatistics;
+    private AverageIntegerStatistics queueStatistics;
 
 
     /**
@@ -163,9 +156,10 @@ public final class MyMiddleware implements Runnable {
         while (!this.clientQueue.isEmpty()) {
             // Busyspin here
         }
+        this.queueStatistics.stopStatistics();
 
         // Workers don't accept new elements from the queue -- all workers will be interrupted by design
-        Worker.setStopFlag(true);
+        MemcachedHandler.setStopFlag(true);
 
         // Shut down the threadpool
         this.workerThreads.shutdown();
@@ -177,30 +171,20 @@ public final class MyMiddleware implements Runnable {
             this.workerThreads.shutdownNow();
         }
 
-        this.queueStatistics.stopQueue();
+        // Definitely disable statistics at this point
         MiddlewareStatistics.disableStatistics();
-        // TODO: Also on WorkerStatistics
-
-        this.statisticsThreads.shutdown();
-        try {
-            if (!this.statisticsThreads.awaitTermination(10, TimeUnit.SECONDS)) {
-                this.statisticsThreads.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            this.statisticsThreads.shutdownNow();
-        }
 
         // Get results from each thread and generate final results
-/*        for (Future<WorkerStatistics> workResult : this.workerResults) {
+        for (Future<WorkerStatistics> workResult : this.workerResults) {
             try {
-                this.mergedWorkerStatistics.add(workResult.get(10, TimeUnit.SECONDS));
+                this.mergedWorkerStatistics.addOther(workResult.get(10, TimeUnit.SECONDS));
             } catch (InterruptedException | TimeoutException | ExecutionException e) {
                 e.printStackTrace();
             }
-        }*/
+        }
 
         try {
-            printMiddlewareStatistics(Paths.get(System.getProperty("user.home"), this.logDir));
+            printMiddlewareStatistics(Paths.get(System.getProperty("user.home"), this.logDir), true);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -243,52 +227,30 @@ public final class MyMiddleware implements Runnable {
         // Initialize datastructures once the middleware is up
         this.clientQueue = new WorkQueue(CLIENT_QUEUE_SIZE);
 
-        Worker.setWorkQueue(this.clientQueue);
-        Worker.setMemcachedServers(this.memcachedServers);
-        Worker.setIsSharded(this.isShardedRead);
+        MemcachedHandler.setWorkQueue(this.clientQueue);
+        MemcachedHandler.setMemcachedServers(this.memcachedServers);
+        MemcachedHandler.setIsSharded(this.isShardedRead);
 
         this.workerThreads = Executors.newFixedThreadPool(this.numThreadPoolThreads);
         this.workerResults = new ArrayList<>(this.numThreadPoolThreads);
-        this.workerList = new ArrayList<>(this.numThreadPoolThreads);
+        //ArrayList<MemcachedHandler> workerList = new ArrayList<>(this.numThreadPoolThreads);
         for (int i = 0; i < this.numThreadPoolThreads; i++) {
-            Worker temp = new Worker(i);
-            workerList.add(temp);
+            MemcachedHandler temp = new MemcachedHandler(i);
+            //workerList.add(temp);
             this.workerResults.add(this.workerThreads.submit(temp));
         }
     }
 
-    /**
-     * Enable the instrumentation to generate performance statistics of the middleware.
-     * @param enableHandlers Should the performance statistics handlers be enabled immediately to run?
-     */
-    private void initMiddlewareStatistics(boolean enableHandlers)
-    {
-        MiddlewareStatistics.enableStatistics();
-        this.queueStatistics = this.clientQueue.queueStatistics;
-        /*this.queueHandler = new QueueHandler(this.clientQueue);
-        this.workerHandler = new WorkerHandler(this.workerList);
-
-        if (enableHandlers) {
-            this.queueHandler.enable();
-            this.workerHandler.enable();
-        }
-
-        this.statisticsThreads.scheduleAtFixedRate(queueHandler, 0, MiddlewareStatistics.TIME_INTERVAL, MiddlewareStatistics.TIME_UNIT);
-        this.statisticsThreads.scheduleAtFixedRate(workerHandler, 0, MiddlewareStatistics.TIME_INTERVAL, MiddlewareStatistics.TIME_UNIT);
-        */
-    }
-
-    private void printMiddlewareStatistics(Path directoryPath) throws IOException
+    private void printMiddlewareStatistics(Path directoryPath, boolean useSTDOUT) throws IOException
     {
         if (!Files.exists(directoryPath, LinkOption.NOFOLLOW_LINKS)) {
             Files.createDirectory(directoryPath);
         }
 
-        StringBuilder temp = new StringBuilder();
-        this.queueStatistics.getWindowAverages().forEach(item -> temp.append(item + "\n"));
-        byte[] tempBytes = temp.toString().getBytes();
         Path queueStatisticsPath = Paths.get(directoryPath.toString(), "queue_statistics.txt");
-        Path queueStatisticsFile = Files.createFile(queueStatisticsPath);
-        Files.write(queueStatisticsFile, tempBytes);
+        this.queueStatistics.printStatistics(queueStatisticsPath, useSTDOUT);
+
+        Path mergedWorkerStatisticsPath = Paths.get(directoryPath.toString(), "merged_workerstatistics.txt");
+        //this.mergedWorkerStatistics.printStatistics(mergedWorkerStatisticsPath, useSTDOUT);
     }
 }

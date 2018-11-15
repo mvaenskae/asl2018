@@ -1,7 +1,5 @@
 package ch.ethz.asltest;
 
-import ch.ethz.asltest.Middleware.MyMiddleware;
-
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;

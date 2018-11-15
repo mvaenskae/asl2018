@@ -1,8 +1,8 @@
-package ch.ethz.asltest.Utilities.Statistics.StatisticsElement;
+package ch.ethz.asltest.Utilities.Statistics.Element;
 
 public final class AccumulationLongElement extends StatisticsElement {
 
-    private final long timestamp;
+    private long timestamp;
     private long elementCount;
     private long element;
 
@@ -15,14 +15,7 @@ public final class AccumulationLongElement extends StatisticsElement {
 
     public AccumulationLongElement(long timestamp, long element)
     {
-        this.timestamp = timestamp;
-        this.elementCount = 1;
-        this.element = element;
-    }
-
-    public AccumulationLongElement(long element)
-    {
-        this(System.nanoTime(), element);
+        this(timestamp, 1, element);
     }
 
     public void addElement(long element){
@@ -30,9 +23,21 @@ public final class AccumulationLongElement extends StatisticsElement {
         this.element += element;
     }
 
+    public long getAccumulated()
+    {
+        return this.element;
+    }
+
     public double getAverage()
     {
-        return ((double) this.element) / this.elementCount;
+        return ((double) this.element)/this.elementCount;
+    }
+
+    public void reuseElement(long timestamp, long element)
+    {
+        this.timestamp = timestamp;
+        this.elementCount = 1;
+        this.element = element;
     }
 
     @Override
