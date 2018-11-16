@@ -6,7 +6,8 @@ import ch.ethz.asltest.Utilities.Statistics.Element.TimestampedElement;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.sql.Time;
+import java.util.*;
 
 public abstract class WindowStatistics extends MiddlewareStatistics {
     /*
@@ -17,7 +18,7 @@ public abstract class WindowStatistics extends MiddlewareStatistics {
      */
 
     // Stored values which will be kept for the duration of execution
-    final ArrayList<TimestampedElement> windowAverages = new ArrayList<>(INITIAL_CAPACITY);
+    HashMap<Double, Double> windowAverages = new HashMap<>(INITIAL_CAPACITY);
 
     public abstract void addElement(long timestamp, long element);
 
@@ -29,9 +30,11 @@ public abstract class WindowStatistics extends MiddlewareStatistics {
 
     public abstract void stopStatistics();
 
-    public final ArrayList<TimestampedElement> getWindowAverages()
+    public final ArrayList<Map.Entry<Double, Double>> getWindowAverages()
     {
-        return new ArrayList<>(this.windowAverages);
+        ArrayList<Map.Entry<Double, Double>> sortedList = new ArrayList<>(windowAverages.entrySet());
+        sortedList.sort(Comparator.comparing(Map.Entry::getKey));
+        return sortedList;
     }
 
     public final void printStatistics(Path filepath, boolean useSTDOUT) throws IOException
@@ -49,17 +52,11 @@ public abstract class WindowStatistics extends MiddlewareStatistics {
 
     public final void addOther(WindowStatistics other)
     {
-        int arrayDiff = this.windowAverages.size() - other.windowAverages.size();
-        int minCount = arrayDiff > 0 ? other.windowAverages.size(): this.windowAverages.size();
+        other.windowAverages.forEach((key, value) -> this.windowAverages.merge(key, value, (v1, v2) -> v1 + v2));
+    }
 
-        for (int i = 0; i < minCount; ++i) {
-            this.windowAverages.get(i).addElement(other.windowAverages.get(i));
-        }
-
-        if (arrayDiff > 0) {
-            for (int i = minCount + 1; i < other.windowAverages.size(); ++i) {
-                this.windowAverages.add(other.windowAverages.get(i));
-            }
-        }
+    public final void addOtherWeighted(WindowStatistics other, int weighting)
+    {
+        other.windowAverages.forEach((key, value) -> this.windowAverages.merge(key, value, (v1, v2) -> v1 + (v2 / weighting)));
     }
 }

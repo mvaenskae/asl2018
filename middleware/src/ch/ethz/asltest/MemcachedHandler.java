@@ -114,7 +114,6 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
         try {
             while (!stopFlag.get()) {
                 this.workItem = MemcachedHandler.workQueue.get();
-                this.workItem.timestamp.setPopFromQueue(System.nanoTime());
                 switch (this.workItem.type) {
                     case SET:
                         this.workerStats.setElement.incrementOpCounter(this.workItem.timestamp.getPopFromQueue());
@@ -138,7 +137,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                     case INVALID:
                         this.workerStats.invalidPacketCounter(this.workItem.timestamp.getPopFromQueue());
                         this.logger.log(Level.INFO, "MAIN: Popped INVALID.");
-                        // Fallthrough
+                        break;
                     default:
                         this.logger.log(Level.FATAL, "MAIN: Popped UNKNOWN!");
                         break;
@@ -153,7 +152,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                 sKey.cancel();
             }
             this.memcachedSelector.close();
-            this.workerStats.stopStatistics();
+            //this.workerStats.stopStatistics();
         }
 
         return this.workerStats;
@@ -514,8 +513,6 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                 break;
         }
 
-        // TODO: Fix this timestamp here... it is completely incorrect :(
-        this.workItem.timestamp.setReplyFromMemcached(System.nanoTime());
         return result;
     }
 

@@ -3,6 +3,10 @@ package ch.ethz.asltest.Utilities.Statistics.Containers;
 import ch.ethz.asltest.Utilities.Statistics.MiddlewareStatistics;
 import ch.ethz.asltest.Utilities.Statistics.Element.WorkerElement;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 public final class WorkerStatistics extends MiddlewareStatistics {
 
     /*
@@ -10,21 +14,35 @@ public final class WorkerStatistics extends MiddlewareStatistics {
      * queue (finalized it), a count of elements received from the queue and the service time for each memcached server.
      */
 
-    private final CountIntegerStatistics invalidPacketCounter = new CountIntegerStatistics();
-    private final CountIntegerStatistics memcachedMisses = new CountIntegerStatistics();
+    private final CountIntegerStatistics invalidPacketCounter;
+    private final CountIntegerStatistics memcachedMisses;
 
-    public WorkerElement setElement = new WorkerElement();
-    public WorkerElement getElement = new WorkerElement();
-    public WorkerElement multiGetElement = new WorkerElement();
+    public final WorkerElement setElement;
+    public final WorkerElement getElement;
+    public final WorkerElement multiGetElement;
+
+    public WorkerStatistics() {
+        invalidPacketCounter = new CountIntegerStatistics();
+        memcachedMisses = new CountIntegerStatistics();
+
+        setElement = new WorkerElement();
+        getElement = new WorkerElement();
+        multiGetElement = new WorkerElement();
+    }
+
+    public WorkerStatistics(boolean placeholder)
+    {
+        invalidPacketCounter = new CountIntegerStatistics(placeholder);
+        memcachedMisses = new CountIntegerStatistics(placeholder);
+
+        setElement = new WorkerElement(placeholder);
+        getElement = new WorkerElement(placeholder);
+        multiGetElement = new WorkerElement(placeholder);
+    }
 
     public void cacheMiss(long timestamp, int missCount)
     {
         this.memcachedMisses.addElement(timestamp, missCount);
-    }
-
-    public void cacheMiss(long timestamp)
-    {
-        this.memcachedMisses.addElement(timestamp, 1L);
     }
 
     public void invalidPacketCounter(long timestamp)
@@ -41,6 +59,15 @@ public final class WorkerStatistics extends MiddlewareStatistics {
         multiGetElement.addOther(other.multiGetElement);
     }
 
+    public void addOtherWeighted(WorkerStatistics other, int normalizer)
+    {
+        invalidPacketCounter.addOther(other.invalidPacketCounter);
+        memcachedMisses.addOther(other.memcachedMisses);
+        setElement.addOtherWeighted(other.setElement, normalizer);
+        getElement.addOtherWeighted(other.getElement, normalizer);
+        multiGetElement.addOtherWeighted(other.multiGetElement, normalizer);
+    }
+
     public void stopStatistics()
     {
         invalidPacketCounter.stopStatistics();
@@ -50,35 +77,23 @@ public final class WorkerStatistics extends MiddlewareStatistics {
         multiGetElement.disableStatistics();
     }
 
-/*
-    public synchronized void insertWorkerElement(WorkerElement workerElement)
+    public void printAverageStatistics(Path basedirectoryPath, int normalizer, boolean useSTDOUT) throws IOException
     {
-        switch (workerElement.elementType) {
-            case SET:
-                setCounter++;
-                putIntoHistogram(workerElement.memcachedRTT, this.histogramCounterSet);
-                queueWaitingTimeSet.add(workerElement.queueWaitingTime);
-                totalTimeSet.add(workerElement.totalResponseTime);
-                break;
-            case GET:
-                getCounter++;
-                putIntoHistogram(workerElement.memcachedRTT, this.histogramCounterGet);
-                queueWaitingTimeGet.add(workerElement.queueWaitingTime);
-                totalTimeGet.add(workerElement.totalResponseTime);
-                break;
-            case MULTIGET:
-                multiGetCounter++;
-                putIntoHistogram(workerElement.memcachedRTT, this.histogramCounterMultiGet);
-                queueWaitingTimeMultiGet.add(workerElement.queueWaitingTime);
-                totalTimeMultiGet.add(workerElement.totalResponseTime);
-                break;
-        }
+        String prefix = "merged_";
+        Path filename = Paths.get(basedirectoryPath.toString(), prefix+"invalidPackets.txt");
+        invalidPacketCounter.printStatistics(filename, useSTDOUT);
+        filename = Paths.get(basedirectoryPath.toString(), prefix+"missCount.txt");
+        memcachedMisses.printStatistics(filename, useSTDOUT);
+
+        setElement.printStatistics(basedirectoryPath, "set_", useSTDOUT);
+        getElement.printStatistics(basedirectoryPath, "get_", useSTDOUT);
+        multiGetElement.printStatistics(basedirectoryPath, "multiget_", useSTDOUT);
+
+        WorkerElement mergedElement = new WorkerElement(true);
+        mergedElement.addOther(setElement);
+        mergedElement.addOther(getElement);
+        mergedElement.addOther(multiGetElement);
+
+        mergedElement.printStatistics(basedirectoryPath, prefix, useSTDOUT);
     }
-
-
-    private void sumUpAndClear(ArrayList<Long> averageList, ArrayList<Long> windowList)
-    {
-        averageList.add(windowList.stream().mapToLong(Long::longValue).sum());
-        windowList.clear();
-    }*/
 }

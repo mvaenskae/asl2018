@@ -1,16 +1,24 @@
 package ch.ethz.asltest.Utilities.Statistics.Containers;
 
-import ch.ethz.asltest.Utilities.Statistics.Element.TimestampedElement;
-
 public final class CountIntegerStatistics extends AverageIntegerStatistics {
+
+    public CountIntegerStatistics() {}
+
+    public CountIntegerStatistics(boolean placeholder) {
+        super(placeholder);
+    }
 
     @Override
     void finishWindow(boolean useLastElement)
     {
+        double currWindow = getWindow() - TIME_INTERVAL;
+        if (currWindow < 0) {
+            currWindow = 0;
+        }
         if (useLastElement) {
-            windowAverages.add(new TimestampedElement(getWindow() - TIME_INTERVAL, 0.0));
+            windowAverages.put(currWindow, 0.0);
         } else {
-            windowAverages.add(new TimestampedElement(getWindow() - TIME_INTERVAL, (double) windowElement.getAccumulated() / TIME_INTERVAL));
+            windowAverages.put(currWindow, ((double) windowElement.getElementCount()));
         }
     }
 }

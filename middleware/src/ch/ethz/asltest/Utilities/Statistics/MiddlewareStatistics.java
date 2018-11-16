@@ -12,23 +12,34 @@ abstract public class MiddlewareStatistics {
 
     final protected long WINDOW_SIZE = multiplyGetLong(TIME_INTERVAL, NANOS_TO_SECOND);
     // Defines the size of each window normalized to a second.
-    final protected static double TIME_INTERVAL = 1;
+    final protected static double TIME_INTERVAL = 1.0;
     final protected static long NANOS_TO_SECOND = 1_000_000_000;
 
     private static long enabledTimestamp;
+    private static long disabledTimestamp;
 
     // Continuous "counter" for the currently active window normalized to a second.
     private double windowNormalized = 0;
     private long latestElementTimestamp = 0;
 
-    public static void enableStatistics() {
+    public static void enableStatistics()
+    {
         enabledTimestamp = System.nanoTime();
         enabled = true;
     }
 
     public static void disableStatistics()
     {
+        disabledTimestamp = System.nanoTime();
+        if (enabledTimestamp == 0) {
+            enabledTimestamp = disabledTimestamp;
+        }
         enabled = false;
+    }
+
+    protected static long getDisabledTimestamp()
+    {
+        return disabledTimestamp;
     }
 
     private static long multiplyGetLong(double a, double b)

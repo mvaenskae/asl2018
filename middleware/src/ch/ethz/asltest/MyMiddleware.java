@@ -55,7 +55,7 @@ public final class MyMiddleware implements Runnable {
     private ServerSocketChannel serverChannel;
 
     // Instance-bound references to statistics instrumentation
-    private final WorkerStatistics mergedWorkerStatistics = new WorkerStatistics();
+    private final WorkerStatistics mergedWorkerStatistics = new WorkerStatistics(true);
     private ArrayList<Future<WorkerStatistics>> workerResults;
     private AverageIntegerStatistics queueStatistics;
 
@@ -135,7 +135,6 @@ public final class MyMiddleware implements Runnable {
                             }
                             for (WorkUnit wu : completeRequest) {
                                 this.clientQueue.put(wu);
-                                wu.timestamp.setPushOnQueue(System.nanoTime());
                             }
                         }
                     }
@@ -156,7 +155,6 @@ public final class MyMiddleware implements Runnable {
         while (!this.clientQueue.isEmpty()) {
             // Busyspin here
         }
-        this.queueStatistics.stopStatistics();
 
         // Workers don't accept new elements from the queue -- all workers will be interrupted by design
         MemcachedHandler.setStopFlag(true);
@@ -174,17 +172,23 @@ public final class MyMiddleware implements Runnable {
         // Definitely disable statistics at this point
         MiddlewareStatistics.disableStatistics();
 
+        if (this.queueStatistics != null) {
+            this.queueStatistics.stopStatistics();
+        }
+
         // Get results from each thread and generate final results
         for (Future<WorkerStatistics> workResult : this.workerResults) {
             try {
-                this.mergedWorkerStatistics.addOther(workResult.get(10, TimeUnit.SECONDS));
+                WorkerStatistics workerResult = workResult.get(10, TimeUnit.SECONDS);
+                workerResult.stopStatistics();
+                this.mergedWorkerStatistics.addOtherWeighted(workerResult, numThreadPoolThreads);
             } catch (InterruptedException | TimeoutException | ExecutionException e) {
                 e.printStackTrace();
             }
         }
 
         try {
-            printMiddlewareStatistics(Paths.get(System.getProperty("user.home"), this.logDir), true);
+            printMiddlewareStatistics(Paths.get(System.getProperty("user.home"), this.logDir), false);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -247,10 +251,12 @@ public final class MyMiddleware implements Runnable {
             Files.createDirectory(directoryPath);
         }
 
-        Path queueStatisticsPath = Paths.get(directoryPath.toString(), "queue_statistics.txt");
-        this.queueStatistics.printStatistics(queueStatisticsPath, useSTDOUT);
+        if (this.queueStatistics != null) {
+            Path queueStatisticsPath = Paths.get(directoryPath.toString(), "queue_statistics.txt");
+            this.queueStatistics.printStatistics(queueStatisticsPath, useSTDOUT);
+        }
 
-        Path mergedWorkerStatisticsPath = Paths.get(directoryPath.toString(), "merged_workerstatistics.txt");
-        //this.mergedWorkerStatistics.printStatistics(mergedWorkerStatisticsPath, useSTDOUT);
+        Path mergedWorkerStatisticsPath = Paths.get(directoryPath.toString());
+        this.mergedWorkerStatistics.printAverageStatistics(mergedWorkerStatisticsPath, numThreadPoolThreads, useSTDOUT);
     }
 }

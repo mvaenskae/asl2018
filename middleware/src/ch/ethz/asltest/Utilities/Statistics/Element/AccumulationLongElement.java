@@ -23,6 +23,11 @@ public final class AccumulationLongElement extends StatisticsElement {
         this.element += element;
     }
 
+    public long getElementCount()
+    {
+        return this.elementCount;
+    }
+
     public long getAccumulated()
     {
         return this.element;
@@ -30,13 +35,23 @@ public final class AccumulationLongElement extends StatisticsElement {
 
     public double getAverage()
     {
-        return ((double) this.element)/this.elementCount;
+        double res = ((double) this.element)/this.elementCount;
+        if (!Double.isNaN(res)) {
+            return res;
+        } else {
+            return 0.0;
+        }
     }
 
     public void reuseElement(long timestamp, long element)
     {
+        reuseElement(timestamp, 0, element);
+    }
+
+    public void reuseElement(long timestamp, long elementCount, long element)
+    {
         this.timestamp = timestamp;
-        this.elementCount = 1;
+        this.elementCount = elementCount;
         this.element = element;
     }
 

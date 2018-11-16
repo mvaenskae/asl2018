@@ -45,4 +45,10 @@ public final class AccumulationDoubleElement extends StatisticsElement {
     {
         return timestamp + " " + element;
     }
+
+    public void addOther(AccumulationDoubleElement other)
+    {
+        elementCount += other.elementCount;
+        element += other.element;
+    }
 }

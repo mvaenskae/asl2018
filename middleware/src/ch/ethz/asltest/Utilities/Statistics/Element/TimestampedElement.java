@@ -1,6 +1,8 @@
 package ch.ethz.asltest.Utilities.Statistics.Element;
 
-public final class TimestampedElement extends StatisticsElement {
+import java.util.Map;
+
+public final class TimestampedElement implements Map.Entry<Double, Double> {
 
     private final double timestamp;
     private double element;
@@ -21,7 +23,7 @@ public final class TimestampedElement extends StatisticsElement {
         return this.element;
     }
 
-    public void addElement(TimestampedElement other)
+    public void addOther(TimestampedElement other)
     {
         this.element += other.element;
     }
@@ -29,6 +31,34 @@ public final class TimestampedElement extends StatisticsElement {
     @Override
     public String toString()
     {
-        return timestamp + " " + element;
+        return String.format("%.2f %.4f", timestamp, element);
+    }
+
+    public void addWeightedOther(TimestampedElement other, int weighting)
+    {
+        this.element += (other.element / weighting);
+    }
+
+    public TimestampedElement newWeighted(int weighting)
+    {
+        return new TimestampedElement(timestamp, element/weighting);
+    }
+
+    @Override
+    public Double getKey()
+    {
+        return getTimestamp();
+    }
+
+    @Override
+    public Double getValue()
+    {
+        return getElement();
+    }
+
+    @Override
+    public Double setValue(Double value)
+    {
+        return this.element = value;
     }
 }
