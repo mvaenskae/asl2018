@@ -1,0 +1,41 @@
+---
+- hosts: client
+
+  tasks:
+  - name: Installing client software (Ubuntu)
+    become: true
+    apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+    vars:
+        packages:
+        - git
+        - build-essential
+        - autoconf
+        - automake
+        - libpcre3-dev
+        - libevent-dev
+        - pkg-config
+        - zlib1g-dev
+        - dstat
+        - iperf
+        - rsync
+
+  - name: Downloading memtier sources
+    git:
+        repo: "https://github.com/RedisLabs/memtier_benchmark"
+        dest: ~/memtier_benchmark
+        version: 1.2.15
+
+  - name: Configuring memtier
+    command: '{{ item }} chdir=~/memtier_benchmark'
+    loop:
+        - autoreconf -ivf
+        - ./configure
+
+  - name: Building memtier
+    command: make chdir=~/memtier_benchmark
+
+  - name: Installing memtier
+    command: sudo make install chdir=~/memtier_benchmark

@@ -1,0 +1,16 @@
+---
+- hosts: middleware
+  become: true
+
+  tasks:
+  - name: Installing middleware packages (Ubuntu)
+    apt:
+     name: "{{ packages }}"
+     update_cache: yes
+     state: present
+    vars:
+        packages:
+        - openjdk-8-jdk-headless
+        - dstat
+        - iperf
+        - rsync

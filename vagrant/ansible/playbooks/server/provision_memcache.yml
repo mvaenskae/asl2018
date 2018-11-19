@@ -1,0 +1,28 @@
+---
+- hosts: server
+  become: true
+
+  tasks:
+  - name: Installing backend software (Ubuntu)
+    apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+    vars:
+        packages:
+        - memcached
+        - dstat
+        - iperf
+        - rsync
+
+  - name: Make memcache listen on ANY interface
+    replace:
+        dest: /etc/memcached.conf
+        regexp: '^-l 127.0.0.1'
+        replace: '#-l 127.0.0.1'
+
+  - name: "Starting memcached"
+    systemd:
+        name: memcached
+        enabled: yes
+        state: started
