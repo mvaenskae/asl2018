@@ -1,0 +1,17 @@
+---
+- name: Retrieving logs from "{{ ansible_hostname }}"
+  ignore_errors: yes
+  synchronize:
+      mode: pull
+      src: ~/logs
+      dest: ~/
+
+- name: Deleting logs on "{{ ansible_hostname }}"
+  ignore_errors: yes
+  file:
+      path: ~/logs
+      state: absent
+
+- name: Sleeping 2 seconds
+  pause:
+      seconds: 2

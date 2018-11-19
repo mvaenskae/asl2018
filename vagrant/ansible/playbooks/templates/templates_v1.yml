@@ -1,0 +1,94 @@
+#############
+# CONSTANTS #
+#############
+# Memtier
+maximum_key_size: 10000
+maximum_data_size: 4096
+
+# Experiments
+test_duration: 5
+
+
+#############
+# VARIABLES #
+#############
+# Memtier
+## Targets
+memtier_target: "0.0.0.0"
+memtier_target_port: 11211
+memtier_target2: "0.0.0.0"
+memtier_target2_port: 11211
+
+## Ratios
+multiget_count: 1
+get_ratio: 1
+set_ratio: 1
+
+## Workload generation
+ct: 1
+vc: 1
+
+# Middleware
+worker_threads: 0
+is_sharded: false
+memcache_list: "empty"
+
+# Experiment (modified per run)
+exp_id: "null"
+sub_exp: "null"
+repetition: 0
+
+
+#########4##########
+# MEMTIER COMMANDS #
+####################
+mt_cmd: "memtier_benchmark --protocol=memcache_text --expiry-range=259200-259201 --key-maximum={{ maximum_key_size }} --data-size={{ maximum_data_size }} --server={{ memtier_target }} --port={{ memtier_target_port }} --clients={{ vc }} --threads={{ ct }} --test-time={{ test_duration }}"
+mt_cmd_var: "{{ mt_cmd }} --ratio={{ set_ratio }}:{{ get_ratio }}"
+mt_cmd_multiget: "{{ mt_cmd }} --ratio=1:{{ multiget_count }} --multi-key-get={{ multiget_count }}"
+mt_cmd_populate: "{{ mt_cmd }} --ratio=1:0 --key-pattern=S:S --requests={{ maximum_key_size + 1 }}"
+
+mt_cmd2: "memtier_benchmark --protocol=memcache_text --expiry-range=259200-259201 --key-maximum={{ maximum_key_size }} --data-size={{ maximum_data_size }} --server={{ memtier_target2 }} --port={{ memtier_target2_port }} --clients={{ vc }} --threads={{ ct }} --test-time={{ test_duration }}"
+mt_cmd2_var: "{{ mt_cmd2 }} --ratio={{ set_ratio }}:{{ get_ratio }}"
+mt_cmd2_multiget: "{{ mt_cmd2 }} --ratio=1:{{ multiget_count }} --multi-key-get={{ multiget_count }}"
+
+
+#######################
+# MIDDLEWARE COMMANDS #
+#######################
+# Ugly hack for the middleware to always listen on itself and port 8080
+mw_cmd: "java -jar middleware-mickeyv.jar -l {{ ansible_host }} -p 8080 -t {{ worker_threads }} -s {{ is_sharded }} -m {{ memcache_list }}"
+
+
+##################
+# DSTAT COMMANDS #
+##################
+dstat_cmd: "dstat"
+
+
+####################
+# LOGGING COMMANDS #
+####################
+log_base: "logs/{{ exp_id }}/{{ sub_exp }}/{{ worker_threads }}/{{ vc }}/{{ repetition }}/{{ ansible_hostname }}"
+
+base_middleware: "{{ type }}_{{ ct }}"
+
+base_memtier: "{{ type }}_{{ memtier_target }}_{{ memtier_target_port }}_{{ ct }}"
+base2_memtier: "{{ type }}_{{ memtier_target2 }}_{{ memtier_target2_port }}_{{ ct }}"
+
+log_memtier_stdout: "{{ log_base }}/{{ base_memtier }}.stdout"
+log_memtier_stderr: "{{ log_base }}/{{ base_memtier }}.stderr"
+log_memtier_full: "> {{ log_memtier_stdout }} 2> {{ log_memtier_stderr }}"
+log_memtier_ping: "{{ log_base }}/{{ base_memtier }}.ping"
+log_memtier_dstat: "{{ log_base }}/{{ base_memtier }}.dstat"
+
+log2_memtier_stdout: "{{ log_base }}/{{ base2_memtier }}.stdout"
+log2_memtier_stderr: "{{ log_base }}/{{ base2_memtier }}.stderr"
+log2_memtier_full: "> {{ log2_memtier_stdout }} 2> {{ log2_memtier_stderr }}"
+log2_memtier_ping: "{{ log_base }}/{{ base2_memtier }}.ping"
+log2_memtier_dstat: "{{ log_base }}/{{ base2_memtier }}.dstat"
+
+mt_cmd_log: "{{ mt_cmd_var }} {{ log_memtier_full }}"
+mt_cmd2_log: "{{ mt_cmd2_var }} {{ log2_memtier_full }}"
+
+mt_multiget_log: "{{ mt_cmd_multiget }} {{ log_memtier_full }}"
+mt_multiget2_log: "{{ mt_cmd2_multiget }} {{ log2_memtier_full }}"
