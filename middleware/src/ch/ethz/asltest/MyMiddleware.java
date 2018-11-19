@@ -36,6 +36,7 @@ public final class MyMiddleware implements Runnable {
     private final static int CLIENT_QUEUE_SIZE = 256;
     private final static int MAXIMUM_THREADS = 128;
     final static String logDir = "mw-stats";
+    private final boolean useSTDOUT = false;
 
     // Instance-bound default objects
     private static final Logger logger = LogManager.getLogger(MyMiddleware.class);
@@ -176,19 +177,42 @@ public final class MyMiddleware implements Runnable {
             this.queueStatistics.stopStatistics();
         }
 
+        Path logPath = Paths.get(System.getProperty("user.home"), this.logDir);
+        if (!Files.exists(logPath, LinkOption.NOFOLLOW_LINKS)) {
+            try {
+                Files.createDirectory(logPath);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+
         // Get results from each thread and generate final results
+        int threadID = 0;
         for (Future<WorkerStatistics> workResult : this.workerResults) {
             try {
                 WorkerStatistics workerResult = workResult.get(10, TimeUnit.SECONDS);
+                if (workerResult == null) {
+                    System.exit(0); // Ugly hack to allow normal termination
+                }
                 workerResult.stopStatistics();
+                Path workerPath = Paths.get(logPath.toString(), String.format("%03d", threadID++));
+                if (!Files.exists(workerPath, LinkOption.NOFOLLOW_LINKS)) {
+                    try {
+                        Files.createDirectory(workerPath);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                workerResult.printAverageStatistics(workerPath, useSTDOUT);
                 this.mergedWorkerStatistics.addOtherWeighted(workerResult, numThreadPoolThreads);
-            } catch (InterruptedException | TimeoutException | ExecutionException e) {
+            } catch (InterruptedException | TimeoutException | ExecutionException | IOException e) {
                 e.printStackTrace();
             }
         }
 
         try {
-            printMiddlewareStatistics(Paths.get(System.getProperty("user.home"), this.logDir), false);
+            printMiddlewareStatistics(logPath, useSTDOUT);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -257,6 +281,6 @@ public final class MyMiddleware implements Runnable {
         }
 
         Path mergedWorkerStatisticsPath = Paths.get(directoryPath.toString());
-        this.mergedWorkerStatistics.printAverageStatistics(mergedWorkerStatisticsPath, numThreadPoolThreads, useSTDOUT);
+        this.mergedWorkerStatistics.printAverageStatistics(mergedWorkerStatisticsPath, useSTDOUT);
     }
 }

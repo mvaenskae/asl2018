@@ -37,8 +37,11 @@ public class AverageIntegerStatistics extends WindowStatistics {
             finishWindow(true);
         } else {
             // Add the last element to the previous window, then calculate the average of it
+            if (splitTimestamp.first == WindowStatistics.NANOS_TO_SECOND)
+            {
+                int i = 1;
+            }
             finishLastWindow(splitTimestamp.first);
-
         }
 
         // Accumulation may have slept for longer than a single boundary crossing -- infer how many there were
@@ -91,6 +94,10 @@ public class AverageIntegerStatistics extends WindowStatistics {
         long timestamp = getDisabledTimestamp();
         // Split up the current timestamp into current window and next window (after calling it the current window is the next window)
         Tuple<Long, Long> splitTimestamp = splitOverWindowBoundary(timestamp);
+
+        if (splitTimestamp.first > 0) {
+            finishWindow(true);
+        }
 
         // Accumulation may have slept for longer than a single boundary crossing
         while (splitTimestamp.second > 0) {

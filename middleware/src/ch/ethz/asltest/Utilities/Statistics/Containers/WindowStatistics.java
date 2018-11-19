@@ -40,7 +40,9 @@ public abstract class WindowStatistics extends MiddlewareStatistics {
     public final void printStatistics(Path filepath, boolean useSTDOUT) throws IOException
     {
         StringBuilder temp = new StringBuilder();
-        getWindowAverages().forEach(item -> temp.append(item).append("\n"));
+        getWindowAverages().forEach(item -> {
+            temp.append(item.getKey()).append(", ").append(item.getValue()).append("\n");
+        });
         if (useSTDOUT) {
             System.out.println(temp.toString());
         } else {

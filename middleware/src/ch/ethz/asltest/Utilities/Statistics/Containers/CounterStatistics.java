@@ -1,10 +1,10 @@
 package ch.ethz.asltest.Utilities.Statistics.Containers;
 
-public final class CountIntegerStatistics extends AverageIntegerStatistics {
+public final class CounterStatistics extends AverageIntegerStatistics {
 
-    public CountIntegerStatistics() {}
+    public CounterStatistics() {}
 
-    public CountIntegerStatistics(boolean placeholder) {
+    public CounterStatistics(boolean placeholder) {
         super(placeholder);
     }
 

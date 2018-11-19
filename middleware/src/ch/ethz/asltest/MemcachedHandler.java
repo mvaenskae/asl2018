@@ -36,7 +36,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
     private final int id; // id of instance
 
     // Instance-local fields, initialized at compile-time
-    public final WorkerStatistics workerStats = new WorkerStatistics();
+    private final WorkerStatistics workerStats = new WorkerStatistics();
     private final Map<String, PacketParser> packetParsers = new HashMap<>(memcachedServers.size()); // map of packet parsers bound to each communicating party (required for attachment purposes and limiting object trashing
     private final Map<SelectionKey, Integer> fairnessMap = new HashMap<>(memcachedServers.size()); // map keeping track of usage per server
 
@@ -125,6 +125,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                         int keyCount = ((WorkUnitGet) this.workItem).keys.size();
                         if (keyCount > 1) {
                             this.workerStats.multiGetElement.incrementOpCounter(this.workItem.timestamp.getPopFromQueue());
+                            this.workerStats.multiGetElement.recordKeySize(this.workItem.timestamp.getPopFromQueue(), keyCount);
                             this.workerStats.multiGetElement.addAverageWaitingTimeQueue(this.workItem);
                             this.logger.log(Level.INFO, "MAIN: Popped multiGET ({}).", keyCount);
                         } else {
@@ -465,7 +466,13 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                                         long memcachedStarted = memcachedTimings.get(key);
                                         memcachedDeltas.put(key, new Tuple<>(maybeFinished, maybeFinished - memcachedStarted));
 
-                                        workerStats.cacheMiss(maybeFinished, expectedResponsesCount.get(key));
+                                        if (this.workItem.type == WorkUnitType.GET) {
+                                            if (((WorkUnitGet) this.workItem).keys.size() > 1) {
+                                                this.workerStats.multiGetElement.cacheMiss(maybeFinished, expectedResponsesCount.get(key));
+                                            } else {
+                                                this.workerStats.getElement.cacheMiss(maybeFinished, expectedResponsesCount.get(key));
+                                            }
+                                        }
                                         actualResponseCount += expectedResponsesCount.get(key);
                                         expectedResponsesCount.put(key, 0);
 

@@ -3,7 +3,7 @@ package ch.ethz.asltest.Utilities.Statistics.Element;
 import ch.ethz.asltest.Utilities.Misc.Tuple;
 import ch.ethz.asltest.Utilities.Packets.WorkUnit.WorkUnit;
 import ch.ethz.asltest.Utilities.Statistics.Containers.AverageIntegerStatistics;
-import ch.ethz.asltest.Utilities.Statistics.Containers.CountIntegerStatistics;
+import ch.ethz.asltest.Utilities.Statistics.Containers.CounterStatistics;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
@@ -14,22 +14,24 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public final class WorkerElement extends StatisticsElement {
+public abstract class WorkerElement extends StatisticsElement {
 
-    private final static int RESOLUTION_PER_SECOND = 10_000; // 100µs resolution
-    private final int NANOS_TO_BUCKET = 100_000; // 100µs resolution
+    protected final static int BUCKET_COUNT = 500; // 50ms histogram
+    protected final int NANOS_TO_BUCKET = 100_000; // 100µs resolution
 
     // Keep track of the following averages:
-    private final CountIntegerStatistics numberOfOps;
-    private final AverageIntegerStatistics averageWaitingTimeQueue;
-    private final AverageIntegerStatistics averageServiceTimeMemcached;
-    private final AverageIntegerStatistics averageRTT;
+    protected final CounterStatistics numberOfOps;
+    protected final AverageIntegerStatistics averageWaitingTimeQueue;
+    protected final AverageIntegerStatistics averageServiceTimeMemcached;
+    protected final AverageIntegerStatistics averageRTT;
+
 
     // Each bucket is in the range of [index - 1 * 100µs, index * 100µs) for index > 1.
-    private final long[] histogram = new long[RESOLUTION_PER_SECOND];
+    protected final long[] histogram = new long[BUCKET_COUNT];
 
     public WorkerElement() {
-        numberOfOps = new CountIntegerStatistics();
+        numberOfOps = new CounterStatistics();
+
         averageWaitingTimeQueue = new AverageIntegerStatistics();
         averageServiceTimeMemcached = new AverageIntegerStatistics();
         averageRTT = new AverageIntegerStatistics();
@@ -37,13 +39,14 @@ public final class WorkerElement extends StatisticsElement {
 
     public WorkerElement(boolean placeholder)
     {
-        numberOfOps = new CountIntegerStatistics(placeholder);
+        numberOfOps = new CounterStatistics(placeholder);
+
         averageWaitingTimeQueue = new AverageIntegerStatistics(placeholder);
         averageServiceTimeMemcached = new AverageIntegerStatistics(placeholder);
         averageRTT = new AverageIntegerStatistics(placeholder);
     }
 
-    public void addAverageServiceTimeMemcached(HashMap<SelectionKey, Tuple<Long, Long>> serverTimes)
+    public final void addAverageServiceTimeMemcached(HashMap<SelectionKey, Tuple<Long, Long>> serverTimes)
     {
         // find maximum response time from the HasHMap
         Tuple<Long, Long> slowestResponse =
@@ -54,13 +57,13 @@ public final class WorkerElement extends StatisticsElement {
         averageServiceTimeMemcached.addElement(slowestResponse.first, slowestResponse.second);
     }
 
-    public void addAverageWaitingTimeQueue(WorkUnit unit)
+    public final void addAverageWaitingTimeQueue(WorkUnit unit)
     {
         long nanosOnQueue = unit.timestamp.getPopFromQueue() - unit.timestamp.getPushOnQueue();
         averageWaitingTimeQueue.addElement(unit.timestamp.getPopFromQueue(), nanosOnQueue);
     }
 
-    public void addAverageRTT(WorkUnit unit)
+    public final void addAverageRTT(WorkUnit unit)
     {
         long nanosRTT = unit.timestamp.getReplyOnSocket() - unit.timestamp.getArrivedOnSocket();
         averageRTT.addElement(unit.timestamp.getReplyOnSocket(), nanosRTT);
@@ -72,7 +75,7 @@ public final class WorkerElement extends StatisticsElement {
         numberOfOps.addElement(timestamp, 1L);
     }
 
-    public void addOther(WorkerElement other)
+    public void merge(WorkerElement other)
     {
         this.numberOfOps.addOther(other.numberOfOps);
         this.averageWaitingTimeQueue.addOther(other.averageWaitingTimeQueue);
@@ -110,7 +113,7 @@ public final class WorkerElement extends StatisticsElement {
         return super.toString();
     }
 
-    private void putIntoHistogram(long inNanos)
+    protected void putIntoHistogram(long inNanos)
     {
         long bucket = inNanos / NANOS_TO_BUCKET;
         bucket = (bucket > histogram.length) ? histogram.length : bucket;
@@ -133,12 +136,66 @@ public final class WorkerElement extends StatisticsElement {
 
         filename = Paths.get(basedirectoryPath.toString(), prefix+"histogram.txt");
         String temp = IntStream.range(0, histogram.length)
-                .mapToObj(bucket -> String.format("%f=%d\n", ((double) bucket) / 10, histogram[bucket])).collect(Collectors.joining());
+                .mapToObj(bucket -> String.format("%f, %d\n", ((double) bucket) / 10, histogram[bucket])).collect(Collectors.joining());
         if (useSTDOUT) {
             System.out.println(temp);
         } else {
             byte[] tempBytes = temp.getBytes();
             Files.write(filename, tempBytes);
+        }
+    }
+
+    public HashMap<Double, ArrayList<Double>> getCsv()
+    {
+        HashMap<Double, ArrayList<Double>> csvLayout = new HashMap<>();
+
+        numberOfOps.getWindowAverages().forEach(entry ->
+        {
+            csvLayout.put(entry.getKey(), new ArrayList<>());
+            csvLayout.get(entry.getKey()).add(entry.getValue());
+        });
+
+        averageWaitingTimeQueue.getWindowAverages().forEach(entry ->
+            csvLayout.get(entry.getKey()).add(entry.getValue())
+        );
+
+        averageServiceTimeMemcached.getWindowAverages().forEach(entry ->
+                csvLayout.get(entry.getKey()).add(entry.getValue())
+        );
+
+        averageRTT.getWindowAverages().forEach(entry ->
+                csvLayout.get(entry.getKey()).add(entry.getValue())
+        );
+
+        return csvLayout;
+    }
+
+    public void printCsv(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
+    {
+        ArrayList<Map.Entry<Double, ArrayList<Double>>> sortedList = new ArrayList<>(this.getCsv().entrySet());
+        sortedList.sort(Comparator.comparing(Map.Entry::getKey));
+
+        Path filename = Paths.get(basedirectoryPath.toString(), prefix+"table.csv");
+
+        StringBuilder csvBuilder = new StringBuilder();
+        ArrayList<Double> line;
+        for (Map.Entry<Double, ArrayList<Double>> doubleArrayListEntry : sortedList) {
+            StringBuilder lineBuilder = new StringBuilder();
+            line = doubleArrayListEntry.getValue();
+            csvBuilder.append(doubleArrayListEntry.getKey()).append(", ");
+            lineBuilder.append(line.get(0));
+            for (int j = 1; j < line.size(); ++j) {
+                lineBuilder.append(", ").append(line.get(j));
+            }
+            csvBuilder.append(lineBuilder.toString()).append("\n");
+        }
+
+        if (useSTDOUT) {
+            System.out.println(csvBuilder.toString());
+        } else {
+            byte[] csvBytes = csvBuilder.toString().getBytes();
+            Path csvStatisticsFile = Files.createFile(filename);
+            Files.write(csvStatisticsFile, csvBytes);
         }
     }
 }

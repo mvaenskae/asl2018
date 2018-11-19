@@ -6,6 +6,12 @@ import ch.ethz.asltest.Utilities.Statistics.Element.AccumulationLongElement;
 public final class AverageAreaIntegerStatistics extends AverageIntegerStatistics {
     public AverageAreaIntegerStatistics() {}
 
+    public AverageAreaIntegerStatistics(boolean placeholder)
+    {
+        super(placeholder);
+
+    }
+
     @Override
     public final void addElement(long timestamp, long element)
     {
