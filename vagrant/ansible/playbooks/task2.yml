@@ -1,13 +1,13 @@
 ---
-- name: Task 2 - Baseline without Middleware
-  hosts: client
+- name: "Task 2: Baseline without Middleware"
+  hosts: client:server
 
 # INCLUDE IPERF TEST
 - import_playbook: task2_baseline-without-middleware/2-1_one-server.yml
 - import_playbook: task2_baseline-without-middleware/2-2_two-servers.yml
 
-- name: Cleanup
-  hosts: all
+- name: "Task 2: Retrieving logs..."
+  hosts: client:server
 
   tasks:
     - include_tasks: basic_blocks/cleanup-logs.yml
