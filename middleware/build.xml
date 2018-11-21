@@ -4,6 +4,10 @@
   </description>
   <!-- set global properties for this build -->
 
+  <!-- Java compliance level -->
+  <property name="ant.build.javac.source" value="1.8"/>
+  <property name="ant.build.javac.target" value="1.8"/>
+
   <!-- Project name and main class -->
   <property name="nethzid" value="mickeyv"/>
   <property name="projectName" value="ASL18-Middleware-${nethzid}"/>
@@ -41,7 +45,7 @@
   <!-- Compilation target -->
   <target name="compile" depends="init" description="compile the source">
     <!-- Compile the java code from ${src} into ${build} -->
-    <javac srcdir="${src.dir}" destdir="${build.dir}" includeantruntime="true" classpathref="deps.path"/>
+    <javac srcdir="${src.dir}" destdir="${build.dir}" includeantruntime="true" classpathref="deps.path" release="8"/>
     <copy todir="${build.dir}">
       <fileset dir="${lib.dir}" excludes="**/*.jar"/>
     </copy>
