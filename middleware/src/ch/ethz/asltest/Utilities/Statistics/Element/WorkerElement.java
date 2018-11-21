@@ -116,7 +116,7 @@ public abstract class WorkerElement extends StatisticsElement {
     protected void putIntoHistogram(long inNanos)
     {
         long bucket = inNanos / NANOS_TO_BUCKET;
-        bucket = (bucket > histogram.length) ? histogram.length : bucket;
+        bucket = (bucket > histogram.length) ? histogram.length - 1 : bucket;
         histogram[(int) bucket]++;
     }
 

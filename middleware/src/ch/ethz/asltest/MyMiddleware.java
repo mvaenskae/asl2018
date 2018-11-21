@@ -135,6 +135,7 @@ public final class MyMiddleware implements Runnable {
                                 this.queueStatistics = this.clientQueue.queueStatistics;
                             }
                             for (WorkUnit wu : completeRequest) {
+                                logger.log(Level.DEBUG, "Net-Thread putting Request on shared queue.");
                                 this.clientQueue.put(wu);
                             }
                         }

@@ -37,10 +37,6 @@ public class AverageIntegerStatistics extends WindowStatistics {
             finishWindow(true);
         } else {
             // Add the last element to the previous window, then calculate the average of it
-            if (splitTimestamp.first == WindowStatistics.NANOS_TO_SECOND)
-            {
-                int i = 1;
-            }
             finishLastWindow(splitTimestamp.first);
         }
 
