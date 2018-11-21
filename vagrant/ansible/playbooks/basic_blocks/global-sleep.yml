@@ -1,0 +1,4 @@
+---
+- name: Sleeping 2 seconds
+  pause:
+      seconds: 2

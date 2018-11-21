@@ -1,0 +1,37 @@
+---
+- name: Middleware termination
+  hosts: middleware
+  vars_files:
+      - ../templates/templates_v1.yml
+
+  tasks:
+    - import_tasks: ../basic_blocks/create-logdir.yml
+
+    - name: Getting Middleware process ID
+      shell: "ps -ef | grep -v grep | grep -w middleware-mickeyv.jar | awk '{print $2}'"
+      register: middleware_pid
+
+    - name: Killing Middleware
+      command: "kill {{ item }}"
+      with_items: "{{ middleware_pid.stdout_lines }}"
+
+    # The following two commands may be rather ugly and not very log-friendly
+    - wait_for:
+        path: "/proc/{{ item }}/status"
+        state: absent
+        connect_timeout: 2
+        timeout: 10
+      with_items: "{{ middleware_pid.stdout_lines }}"
+      ignore_errors: yes
+      register: killed_processes
+
+    - name: Forcefully kill the middleware (if needed)
+      shell: "kill -9 {{ item }}"
+      with_items: "{{ killed_processes.results | select('failed') | map(attribute='item') | list }}"
+
+    # - import_tasks: ../basic_blocks/global-sleep.yml
+
+    - name: Moving log to logging directory
+      shell: "mv mw-stats {{ log_middleware }}"
+
+    # - import_tasks: ../basic_blocks/global-sleep.yml

@@ -1,0 +1,19 @@
+---
+- name: "Running Single Memtier Instance"
+  hosts: client
+  vars_files:
+    - ../templates/templates_v1.yml
+
+  tasks:
+    - import_tasks: ../basic_blocks/create-logdir.yml
+
+    - name: "Experiment {{ exp_id }}.{{ sub_exp }} ({{ worker_threads }} | {{ vc }}/{{ repetition }}) {{ type }} @ {{ memtier_target }}:{{ memtier_target_port }}"
+      shell: |
+          {{ dstat_cmd }} > {{ log_memtier_dstat }} &
+          ping {{ memtier_target }} > {{ log_memtier_ping }} &
+          {{ mt_cmd_log }}
+
+    - name: Fixing history log
+      command: perl -p -i -e 's/\r/\n/g' {{ log_memtier_stderr }}
+
+    # - import_tasks: ../basic_blocks/global-sleep.yml

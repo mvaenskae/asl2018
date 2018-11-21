@@ -8,35 +8,38 @@ maximum_data_size: 4096
 # Experiments
 test_duration: 5
 
+# Middleware
+mw_jar_path: "~"
+mw_jar_file: "{{ mw_jar_path }}/middleware-mickeyv.jar"
 
 #############
 # VARIABLES #
 #############
 # Memtier
 ## Targets
-memtier_target: "0.0.0.0"
-memtier_target_port: 11211
-memtier_target2: "0.0.0.0"
-memtier_target2_port: 11211
+# memtier_target: "0.0.0.0"
+# memtier_target_port: 0
+# memtier_target2: "0.0.0.0"
+# memtier_target2_port: 0
 
 ## Ratios
-multiget_count: 1
-get_ratio: 1
-set_ratio: 1
+# multiget_count: 0
+# get_ratio: 0
+# set_ratio: 0
 
 ## Workload generation
-ct: 1
-vc: 1
+# ct: 0
+# vc: 0
 
 # Middleware
-worker_threads: 0
-is_sharded: false
-memcache_list: "empty"
+# worker_threads: 0
+# is_sharded: false
+# memcache_list: "empty"
 
 # Experiment (modified per run)
-exp_id: "null"
-sub_exp: "null"
-repetition: 0
+# exp_id: "null"
+# sub_exp: "null"
+# repetition: 0
 
 
 #########4##########
@@ -45,11 +48,14 @@ repetition: 0
 mt_cmd: "memtier_benchmark --protocol=memcache_text --expiry-range=259200-259201 --key-maximum={{ maximum_key_size }} --data-size={{ maximum_data_size }} --server={{ memtier_target }} --port={{ memtier_target_port }} --clients={{ vc }} --threads={{ ct }} --test-time={{ test_duration }}"
 mt_cmd_var: "{{ mt_cmd }} --ratio={{ set_ratio }}:{{ get_ratio }}"
 mt_cmd_multiget: "{{ mt_cmd }} --ratio=1:{{ multiget_count }} --multi-key-get={{ multiget_count }}"
-mt_cmd_populate: "{{ mt_cmd }} --ratio=1:0 --key-pattern=S:S --requests={{ maximum_key_size + 1 }}"
 
 mt_cmd2: "memtier_benchmark --protocol=memcache_text --expiry-range=259200-259201 --key-maximum={{ maximum_key_size }} --data-size={{ maximum_data_size }} --server={{ memtier_target2 }} --port={{ memtier_target2_port }} --clients={{ vc }} --threads={{ ct }} --test-time={{ test_duration }}"
 mt_cmd2_var: "{{ mt_cmd2 }} --ratio={{ set_ratio }}:{{ get_ratio }}"
 mt_cmd2_multiget: "{{ mt_cmd2 }} --ratio=1:{{ multiget_count }} --multi-key-get={{ multiget_count }}"
+
+mt_cmd_populate: "memtier_benchmark --protocol=memcache_text --expiry-range=259200-259201 --key-maximum={{ maximum_key_size }} --data-size={{ maximum_data_size }} --server={{ memtier_target }} --port={{ memtier_target_port }} --clients=1 --threads=2 --ratio=1:0 --key-pattern=S:S --requests={{ maximum_key_size + 1 }}"
+mt_cmd2_populate: "memtier_benchmark --protocol=memcache_text --expiry-range=259200-259201 --key-maximum={{ maximum_key_size }} --data-size={{ maximum_data_size }} --server={{ memtier_target2 }} --port={{ memtier_target2_port }} --clients=1 --threads=2 --ratio=1:0 --key-pattern=S:S --requests={{ maximum_key_size + 1 }}"
+mt_cmd3_populate: "memtier_benchmark --protocol=memcache_text --expiry-range=259200-259201 --key-maximum={{ maximum_key_size }} --data-size={{ maximum_data_size }} --server={{ memtier_target3 }} --port={{ memtier_target3_port }} --clients=1 --threads=2 --ratio=1:0 --key-pattern=S:S --requests={{ maximum_key_size + 1 }}"
 
 
 #######################
@@ -68,9 +74,11 @@ dstat_cmd: "dstat"
 ####################
 # LOGGING COMMANDS #
 ####################
-log_base: "logs/{{ exp_id }}/{{ sub_exp }}/{{ worker_threads }}/{{ vc }}/{{ repetition }}/{{ ansible_hostname }}"
+log_dir: "~/logs"
+log_base: "{{ log_dir }}/{{ exp_id }}/{{ sub_exp }}/{{ worker_threads }}/{{ vc }}/{{ repetition }}/{{ ansible_hostname }}"
 
 base_middleware: "{{ type }}_{{ ct }}"
+log_middleware: "{{ log_base }}/{{ base_middleware}}"
 
 base_memtier: "{{ type }}_{{ memtier_target }}_{{ memtier_target_port }}_{{ ct }}"
 base2_memtier: "{{ type }}_{{ memtier_target2 }}_{{ memtier_target2_port }}_{{ ct }}"

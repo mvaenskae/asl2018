@@ -1,0 +1,15 @@
+---
+- name: "Populating Memcached"
+  hosts: client
+  vars_files:
+    - ../templates/templates_v1.yml
+
+  tasks:
+    - name: "Populating {{ memtier_target }}:{{ memtier_target_port }} & {{ memtier_target2 }}:{{ memtier_target2_port }} & {{ memtier_targer3 }}:{{ memtier_target3_port }}"
+      command: "{{ item }}"
+      loop:
+        - "{{ mt_cmd_populate }}"
+        - "{{ mt_cmd2_populate }}"
+        - "{{ mt_cmd2_populate }}"
+
+    # - import_tasks: ../basic_blocks/global-sleep.yml

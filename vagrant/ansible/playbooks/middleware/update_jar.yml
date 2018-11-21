@@ -1,0 +1,11 @@
+---
+- name: Updating Middleware JAR
+  hosts: middleware
+  vars_files:
+      - ../templates/templates_v1.yml
+
+  tasks:
+    - name: Pushing to server
+      synchronize:
+        src: ../../../../middleware/dist/middleware-mickeyv.jar
+        dest: "{{ mw_jar_path }}"

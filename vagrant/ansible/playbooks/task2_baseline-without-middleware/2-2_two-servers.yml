@@ -1,6 +1,0 @@
----
-- name: "Task 2.2: Two Servers"
-  hosts: client
-
-- import_playbook: task2-2/01_read-only.yml
-- import_playbook: task2-2/02_write-only.yml

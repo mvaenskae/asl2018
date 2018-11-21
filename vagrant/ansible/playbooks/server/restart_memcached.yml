@@ -1,0 +1,9 @@
+---
+- hosts: server
+
+  tasks:
+      - name: Restart memcached
+        become: true
+        systemd:
+            state: restarted
+            name: memcached

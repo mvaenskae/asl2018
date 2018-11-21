@@ -3,7 +3,7 @@
   ignore_errors: yes
   synchronize:
       mode: pull
-      src: ~/logs
+      src: "{{ log_dir }}"
       dest: ~/
 
 - name: Deleting logs on "{{ ansible_hostname }}"
@@ -12,6 +12,6 @@
       path: ~/logs
       state: absent
 
-- name: Sleeping 2 seconds
-  pause:
-      seconds: 2
+# - name: Sleeping 2 seconds
+#   pause:
+#       seconds: 2

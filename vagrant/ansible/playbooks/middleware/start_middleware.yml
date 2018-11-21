@@ -1,0 +1,12 @@
+---
+- name: "Middleware Initialization"
+  hosts: middleware
+  vars_files:
+      - ../templates/templates_v1.yml
+
+  tasks:
+    - name: Starting Middleware
+      # command: "java -jar {{ mw_jar_path }} -l {{ hostvars['middleware'].ip }} -p {{ hostvars['middleware'].port }} -t {{ worker_threads }} -s {{ hostvars['middleware'.is_sharded }} -m {{ hostvars['middleware'].memcache_server_list }} &"
+      shell: "nohup java -jar {{ mw_jar_file }} -l {{ ip }} -p {{ port }} -t {{ worker_threads }} -s {{ is_sharded }} -m {{ memcache_server_list }}&"
+
+    - import_tasks: ../basic_blocks/global-sleep.yml
