@@ -128,8 +128,8 @@ subexperiment_32()
                         LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} vc=${vc_count} type=SET set_ratio=1 get_ratio=0"
                     fi
                     ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
-                    ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/single_double.yml -e "${LOOP_EXPERIMENT_VARS}"
-                    ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/move_logs.yml -e "${LOOP_EXPERIMENT_VARS}"
+                    ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/double_target.yml -e "${LOOP_EXPERIMENT_VARS}"
+                    ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware_and_move_logs.yml -e "${LOOP_EXPERIMENT_VARS}"
                     sleep 1
                 done
             done
@@ -242,7 +242,7 @@ experiment_3()
 {
     echo "Experiment 3: Baseline with Middleware"
 
-    subexperiment_31
+    # subexperiment_31
     subexperiment_32
 
     ansible-playbook -i hosts ./playbooks/basic_blocks/cleanup-logs.yml
