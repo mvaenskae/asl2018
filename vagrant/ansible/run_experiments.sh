@@ -7,8 +7,6 @@
 # student dot ethz dot ch) an ansible-only version. I tried and failed but
 # would be glad for an educational lesson on this.
 
-MIDDLEWARE_PATH='~/middleware-mickeyv.jar'
-
 subexperiment_21()
 {
     echo "Subexperiment 2.1: One Server"
@@ -143,29 +141,19 @@ subexperiment_41()
     HOSTS_FILE="inventory_task41.ini"
 
     base="4.1: "
-    for is_read in true false; do
-        str1=""
-        if [[ "${is_read}" == true ]]; then
-            str1="$base""GET";
-        else
-            str1="$base""SET";
-        fi
-        for thread_count in 08 16 32 64; do
-            str2="$str1"" using ${thread_count} middleware threads"
-            for rep_count in 1 2 3; do
-                str3="$str2"" repetition ${rep_count}/3"
-                for vc_count in 01 02 04 08 16 32; do
-                    echo "$str3 for ${vc_count} clients"
-                    LOOP_EXPERIMENT_VARS="-e \"worker_threads=${thread_count} repetition=${rep_count} vc=${vc_count}\""
-                    ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml "${LOOP_EXPERIMENT_VARS}"
-                    if [[ "${is_read}" == true ]]; then
-                        ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/read_double.yml "${LOOP_EXPERIMENT_VARS}"
-                    else
-                        ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/get_double.yml "${LOOP_EXPERIMENT_VARS}"
-                    fi
-                    ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/move_logs.yml "${LOOP_EXPERIMENT_VARS}"
-                    sleep 1
-                done
+    str1=""
+    str1="$base""SET";
+    for thread_count in 08 16 32 64; do
+        str2="$str1"" using ${thread_count} middleware threads"
+        for rep_count in 1 2 3; do
+            str3="$str2"" repetition ${rep_count}/3"
+            for vc_count in 01 02 04 08 16 32; do
+                echo "$str3 for ${vc_count} clients"
+                LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} vc=${vc_count} type=SET set_ratio=1 get_ratio=0"
+                ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
+                ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/double_target.yml -e "${LOOP_EXPERIMENT_VARS}"
+                ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware_and_move_logs.yml -e "${LOOP_EXPERIMENT_VARS}"
+                sleep 1
             done
         done
     done
