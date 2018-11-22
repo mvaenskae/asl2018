@@ -1,8 +1,6 @@
 ---
 - name: Sending instrumentation helper
   hosts: middleware
-  vars_files:
-      - ../templates/templates_v1.yml
 
   tasks:
     - name: Pushing to host

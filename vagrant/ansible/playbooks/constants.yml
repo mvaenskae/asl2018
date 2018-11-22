@@ -1,0 +1,23 @@
+#############
+# CONSTANTS #
+#############
+# Memtier
+maximum_key_size: 10000
+maximum_data_size: 4096
+
+# Experiments
+test_duration: 5
+
+# Middleware
+mw_jar_path: "~"
+mw_jar_file: "{{ mw_jar_path }}/middleware-mickeyv.jar"
+
+
+####################
+# LOGGING COMMANDS #
+####################
+log_dir: "~/logs"
+log_base: "{{ log_dir }}/{{ exp_id }}/{{ sub_exp }}/{{ worker_threads }}/{{ repetition }}/{{ vc }}/{{ ansible_hostname }}"
+
+base_middleware: "{{ type }}_{{ ct }}"
+log_middleware: "{{ log_base }}/{{ base_middleware}}"

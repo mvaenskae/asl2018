@@ -2,7 +2,7 @@
 - name: "Populating Memcached"
   hosts: 192.168.122.101
   vars_files:
-    - ../templates/templates_v1.yml
+    - ../constants.yml
 
   tasks:
     - name: "Populating {{ memtier_targets }}"

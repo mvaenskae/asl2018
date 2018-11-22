@@ -2,10 +2,10 @@
 - name: "Middleware Initialization"
   hosts: middleware
   vars_files:
-      - ../templates/templates_v1.yml
+      - ../constants.yml
 
   tasks:
     - name: Starting Middleware
-      shell: "./middleware_helper.sh --jar-path {{ mw_jar_file }} --listen-ip {{ ip }} --listen-port {{ port }} --worker-threads {{ worker_threads }} --is-sharded {{ is_sharded }} --log-path {{ log_middleware }} {{ memcached_server_list }} &"
+      shell: "nohup ./middleware_helper.sh --jar-path {{ mw_jar_file }} --listen-ip {{ ip }} --listen-port {{ port }} --worker-threads {{ worker_threads }} --is-sharded {{ is_sharded }} --log-path {{ log_middleware }} {{ memcached_server_list }} </dev/null >/dev/null 2>&1 &"
 
     - import_tasks: ../basic_blocks/global-sleep.yml

@@ -1,16 +1,21 @@
 ---
-- name: Retrieving logs from "{{ ansible_hostname }}"
-  ignore_errors: yes
-  synchronize:
-      mode: pull
-      src: "{{ log_dir }}"
-      dest: ~/
+- hosts: all
+  vars_files:
+      - ../constants.yml
 
-- name: Deleting logs on "{{ ansible_hostname }}"
-  ignore_errors: yes
-  file:
-      path: ~/logs
-      state: absent
+  tasks:
+    - name: Retrieving logs from machine
+      ignore_errors: yes
+      synchronize:
+          mode: pull
+          src: "{{ log_dir }}"
+          dest: ~/
+
+    - name: Deleting logs on machine
+      ignore_errors: yes
+      file:
+          path: ~/logs
+          state: absent
 
 # - name: Sleeping 2 seconds
 #   pause:

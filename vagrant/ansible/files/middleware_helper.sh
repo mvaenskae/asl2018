@@ -12,7 +12,7 @@ INSTRUMENTATION_PIDS=()
 MIDDLEWARE_PID=""
 
 case $key in
-    -j|-jar-path)
+    -j|--jar-path)
     JAR_PATH="$2"
     shift # past argument
     shift # past value
@@ -49,13 +49,41 @@ case $key in
 esac
 done
 
+prep_term()
+{
+    unset MIDDLEWARE_PID
+    unset term_kill_needed
+    trap 'handle_term' TERM INT
+}
+
+handle_term()
+{
+    if [ "${MIDDLEWARE_PID}" ]; then
+        kill -TERM "${MIDDLEWARE_PID}" 2>/dev/null
+    else
+        term_kill_needed="yes"
+    fi
+}
+
+wait_term()
+{
+    # MIDDLEWARE_PID=$!
+    if [ "${term_kill_needed}" ]; then
+        kill -TERM "${MIDDLEWARE_PID}" 2>/dev/null 
+    fi
+    wait ${MIDDLEWARE_PID}
+    trap - TERM INT
+    wait ${MIDDLEWARE_PID}
+}
+
+
 middleware_cmd()
 {
     MIDDLEWARE_CMD="java -jar ${JAR_PATH} -l ${LISTEN_IP} -p ${LISTEN_PORT} -t ${WORKER_THREADS} -s ${IS_SHARDED} -m ${SERVER_PORT_PAIR[*]}"
 
     echo "Middleware listening on ${LISTEN_IP}:${LISTEN_PORT} with memcached backends ${SERVER_PORT_PAIR[*]}"
     ${MIDDLEWARE_CMD} &
-    MDDLEWARE_PID=$!
+    MIDDLEWARE_PID=$!
 }
 
 instrumentation_cmd()
@@ -75,12 +103,17 @@ instrumentation_cmd()
 
 main()
 {
+    prep_term
     mkdir -p "${LOG_PATH}"
     instrumentation_cmd
     middleware_cmd
 
     echo "Waiting for middleware processes to finish"
-    wait $MIDDLEWARE_PID
+    wait_term
+    while kill -0 $MIDDLEWARE_PID >/dev/null 2>&1
+    do
+        sleep 1
+    done
 
     echo "Killing logging facilities as middleware finished"
     for pid in ${INSTRUMENTATION_PIDS[*]}; do
@@ -88,6 +121,7 @@ main()
     done
 
     echo "Moving middleware logs to final directory"
+    sleep 2
     mv ~/mw-stats "${LOG_PATH}"
 
     echo "Goodbye :)"

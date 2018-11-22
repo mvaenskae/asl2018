@@ -2,7 +2,7 @@
 - name: Updating Middleware JAR
   hosts: middleware
   vars_files:
-      - ../templates/templates_v1.yml
+      - ../constants.yml
 
   tasks:
     - name: Pushing to server

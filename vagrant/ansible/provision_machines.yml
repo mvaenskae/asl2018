@@ -1,7 +1,0 @@
----
-- name: Provisioning machines
-  hosts: all
-
-- import_playbook: playbooks/server/provision_memcache.yml
-- import_playbook: playbooks/middleware/provision_middleware.yml
-- import_playbook: playbooks/client/provision_memtier.yml
