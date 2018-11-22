@@ -1,15 +1,11 @@
 ---
 - name: "Populating Memcached"
-  hosts: client
+  hosts: 192.168.122.101
   vars_files:
     - ../templates/templates_v1.yml
 
   tasks:
-    - name: "Populating {{ memtier_target }}:{{ memtier_target_port }} & {{ memtier_target2 }}:{{ memtier_target2_port }} & {{ memtier_targer3 }}:{{ memtier_target3_port }}"
-      command: "{{ item }}"
-      loop:
-        - "{{ mt_cmd_populate }}"
-        - "{{ mt_cmd2_populate }}"
-        - "{{ mt_cmd2_populate }}"
+    - name: "Populating {{ memtier_targets }}"
+      command: bash ./memtier_helper.sh --key-size {{ maximum_key_size }} --data-size {{ maximum_data_size }} --virtual-clients 1 --threads 2 --populate {{ memtier_targets }}
 
     # - import_tasks: ../basic_blocks/global-sleep.yml

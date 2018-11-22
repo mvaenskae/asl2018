@@ -1,0 +1,12 @@
+---
+- name: Sending instrumentation helper
+  hosts: client
+  vars_files:
+      - ../templates/templates_v1.yml
+
+  tasks:
+    - name: Pushing to host
+      copy:
+        src: ../../files/memtier_helper.sh
+        dest: "~"
+        mode: 0755

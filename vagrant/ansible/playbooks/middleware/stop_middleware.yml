@@ -1,11 +1,11 @@
 ---
-- name: Middleware termination
+- name: Terminate Middleware
   hosts: middleware
   vars_files:
       - ../templates/templates_v1.yml
 
   tasks:
-    - import_tasks: ../basic_blocks/create-logdir.yml
+    # - import_tasks: ../basic_blocks/create-logdir.yml
 
     - name: Getting Middleware process ID
       shell: "ps -ef | grep -v grep | grep -w middleware-mickeyv.jar | awk '{print $2}'"
@@ -29,9 +29,9 @@
       shell: "kill -9 {{ item }}"
       with_items: "{{ killed_processes.results | select('failed') | map(attribute='item') | list }}"
 
-    # - import_tasks: ../basic_blocks/global-sleep.yml
+    - import_tasks: ../basic_blocks/global-sleep.yml
 
-    - name: Moving log to logging directory
-      shell: "mv mw-stats {{ log_middleware }}"
+    # - name: Moving log to logging directory
+    #   shell: "mv mw-stats {{ log_middleware }}"
 
     # - import_tasks: ../basic_blocks/global-sleep.yml
