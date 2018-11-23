@@ -37,7 +37,7 @@ public final class WorkQueue {
         synchronized (queueStatistics) {
             long timestamp = System.nanoTime();
             item.timestamp.setPopFromQueue(timestamp);
-            this.queueStatistics.addElement(timestamp, this.workUnits.size());
+            this.queueStatistics.addElement(timestamp, this.workUnits.size() + 1);
         }
     }
 

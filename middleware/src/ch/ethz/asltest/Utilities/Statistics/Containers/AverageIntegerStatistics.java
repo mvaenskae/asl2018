@@ -30,7 +30,7 @@ public class AverageIntegerStatistics extends WindowStatistics {
         // Split up the current timestamp into current window and next window (after calling it the current window is the next window)
         Tuple<Long, Long> splitTimestamp = splitOverWindowBoundary(timestamp);
 
-        boolean lateStart = windowAverages.size() < 1;
+        boolean lateStart = windowAverages.size() < 1 && windowElement.getElementCount() == 0;
 
         if (lateStart) {
             // Edge case where statistics for this queue were not collected from the very first second
@@ -84,8 +84,13 @@ public class AverageIntegerStatistics extends WindowStatistics {
 
     public final void stopStatistics()
     {
+        // Dear reader: The following variable is non-sensically named but sound in logic until finishWindow()...
+        boolean lastWindowEmpty = windowElement.getElementCount() > 0;
         // Finish the last active window
-        finishWindow(false);
+        if (lastWindowEmpty) {
+            updateWindow();
+        }
+        finishWindow(!lastWindowEmpty);
 
         long timestamp = getDisabledTimestamp();
         // Split up the current timestamp into current window and next window (after calling it the current window is the next window)

@@ -53,7 +53,7 @@ abstract public class MiddlewareStatistics {
         return windowNormalized;
     }
 
-    private void updateWindow()
+    protected void updateWindow()
     {
         windowNormalized += TIME_INTERVAL;
     }

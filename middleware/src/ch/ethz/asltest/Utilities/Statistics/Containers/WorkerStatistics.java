@@ -66,12 +66,17 @@ public final class WorkerStatistics extends MiddlewareStatistics {
         Path filename = Paths.get(basedirectoryPath.toString(), prefix+"invalidPackets.txt");
         invalidPacketCounter.printStatistics(filename, useSTDOUT);
 
-        setElement.printStatistics(basedirectoryPath, "set_", useSTDOUT);
+        setElement.printWindowStatistics(basedirectoryPath, "set_", useSTDOUT);
         setElement.printCsv(basedirectoryPath, "set_", useSTDOUT);
-        getElement.printStatistics(basedirectoryPath, "get_", useSTDOUT);
+        setElement.printSummary(basedirectoryPath, "set_", useSTDOUT);
+
+        getElement.printWindowStatistics(basedirectoryPath, "get_", useSTDOUT);
         getElement.printCsv(basedirectoryPath, "get_", useSTDOUT);
-        multiGetElement.printStatistics(basedirectoryPath, "multiget_", useSTDOUT);
+        getElement.printSummary(basedirectoryPath, "get_", useSTDOUT);
+
+        multiGetElement.printWindowStatistics(basedirectoryPath, "multiget_", useSTDOUT);
         multiGetElement.printCsv(basedirectoryPath, "multiget_", useSTDOUT);
+        multiGetElement.printSummary(basedirectoryPath, "multiget_", useSTDOUT);
 
         WorkerGetElement mergedElement = new WorkerGetElement(true);
         WorkerMultiGetElement totalElement = new WorkerMultiGetElement(true);
@@ -81,7 +86,8 @@ public final class WorkerStatistics extends MiddlewareStatistics {
         totalElement.merge(multiGetElement);
         totalElement.merge(mergedElement);
 
-        totalElement.printStatistics(basedirectoryPath, prefix, useSTDOUT);
+        totalElement.printWindowStatistics(basedirectoryPath, prefix, useSTDOUT);
         totalElement.printCsv(basedirectoryPath, prefix, useSTDOUT);
+        totalElement.printSummary(basedirectoryPath, prefix, useSTDOUT);
     }
 }

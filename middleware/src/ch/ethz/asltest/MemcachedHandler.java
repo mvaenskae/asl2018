@@ -40,7 +40,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
     private final Map<String, PacketParser> packetParsers = new HashMap<>(memcachedServers.size());
     // map keeping track of usage per server
     // TODO: USE THIS AS LOAD BALANCER (ugly but we only return the total statistics for it)
-    private final Map<SelectionKey, Integer> fairnessMap = new HashMap<>(memcachedServers.size());
+    private final Map<SelectionKey, Long> fairnessMap = new HashMap<>(memcachedServers.size());
 
     // Instance-local fields, initialized at run-time
     private WorkUnit workItem; // reference to local request to be handled
@@ -151,24 +151,34 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                     "MAIN: Interrupted, cleaning up and disconnecting all attached participants...");
         } finally {
             // Cleanup for thread termination
+            HashMap<String, Long> serverLoad = new HashMap<>();
+
+            try {
+                for(Map.Entry<SelectionKey, Long> entry: fairnessMap.entrySet()) {
+                    serverLoad.put(((SocketChannel) entry.getKey().channel()).getRemoteAddress().toString(), entry.getValue());
+                }
+                this.workerStats.multiGetElement.recordServerLoad(serverLoad);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
             for (SelectionKey sKey : this.memcachedSelector.keys()) {
                 sKey.channel().close();
                 sKey.cancel();
             }
-            // TODO: Save the final statistics of fairness for GETs on each worker
             this.memcachedSelector.close();
         }
 
         return this.workerStats;
     }
 
-    private Map<SelectionKey, Integer> generateShardedGetRequest(Map<SelectionKey, ByteBuffer> requestMap)
+    private Map<SelectionKey, Long> generateShardedGetRequest(Map<SelectionKey, ByteBuffer> requestMap)
     {
         logger.log(Level.DEBUG, "GET: Preparing sharded request for memcached.");
         WorkUnitGet getRequest = (WorkUnitGet) this.workItem;
 
         // Balance number of requests to send out
-        Map<SelectionKey, Integer> expectedResponseCount = this.loadBalancer(getRequest.keys.size());
+        Map<SelectionKey, Long> expectedResponseCount = this.loadBalancer(getRequest.keys.size());
 
         /*
          * Update fairness of memcached servers used, update number of expected responses from servers with "END"
@@ -176,10 +186,10 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
          */
         int iterator = 0;
 
-        for (Map.Entry<SelectionKey, Integer> entry : expectedResponseCount.entrySet()) {
+        for (Map.Entry<SelectionKey, Long> entry : expectedResponseCount.entrySet()) {
 
             // List to store keys in for the current memcache server (its Selectionkey to be specific)
-            ArrayList<ByteBuffer> request = new ArrayList<>(entry.getValue());
+            ArrayList<ByteBuffer> request = new ArrayList<>(entry.getValue().intValue());
 
             // If this server expect load, mark the SelectionKey as writeable and add the packet preamble.
             if (entry.getValue() != 0) {
@@ -203,15 +213,15 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
             iterator += entry.getValue();
             requestMap.put(entry.getKey(), getAsSingleByteBuffer(request));
 
-            this.fairnessMap.merge(entry.getKey(), entry.getValue(), Integer::sum);
-            expectedResponseCount.merge(entry.getKey(), (entry.getValue() == 0) ? 0 : 1, Integer::sum);
+            this.fairnessMap.merge(entry.getKey(), entry.getValue(), Long::sum);
+            expectedResponseCount.merge(entry.getKey(), (entry.getValue() == 0) ? 0L : 1L, Long::sum);
         }
 
         logger.log(Level.DEBUG, "GET: Generated sharded request for memcached.");
         return expectedResponseCount;
     }
 
-    private Map<SelectionKey, Integer> generateGetRequest(Map<SelectionKey, ByteBuffer> requestMap)
+    private Map<SelectionKey, Long> generateGetRequest(Map<SelectionKey, ByteBuffer> requestMap)
     {
         logger.log(Level.DEBUG, "GET: Preparing normal request for memcached.");
         WorkUnitGet getRequest = (WorkUnitGet) this.workItem;
@@ -221,12 +231,12 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
         addToInterestSet(memcachedSocket, SelectionKey.OP_WRITE);
 
         // Put the number of expected reponses explicitly for each memcached server connected to
-        Map<SelectionKey, Integer> expectedResponseCount = new HashMap<>(MemcachedHandler.memcachedServers.size());
-        this.fairnessMap.keySet().forEach(sKey -> expectedResponseCount.put(sKey, 0));
-        expectedResponseCount.merge(memcachedSocket, getRequest.keys.size() + 1, Integer::sum);
+        Map<SelectionKey, Long> expectedResponseCount = new HashMap<>(MemcachedHandler.memcachedServers.size());
+        this.fairnessMap.keySet().forEach(sKey -> expectedResponseCount.put(sKey, 0L));
+        expectedResponseCount.merge(memcachedSocket, (long) getRequest.keys.size() + 1, Long::sum);
 
         // Update the load on the servers, assumes the requests will get through
-        this.fairnessMap.merge(memcachedSocket, getRequest.keys.size(), Integer::sum);
+        this.fairnessMap.merge(memcachedSocket, (long) getRequest.keys.size(), Long::sum);
 
         // Generate the request used for the memcached server
         ByteBuffer request = ByteBuffer.allocateDirect(getRequest.header.length);
@@ -242,7 +252,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
     private void handleGetRequest() throws IOException
     {
         this.workItem.sendBackTo.register(this.memtierSelector, SelectionKey.OP_WRITE);
-        Map<SelectionKey, Integer> expectedResponseCount;
+        Map<SelectionKey, Long> expectedResponseCount;
         Map<SelectionKey, ByteBuffer> requestMap = new HashMap<>();
 
         if (MemcachedHandler.isSharded) {
@@ -307,9 +317,9 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
         this.fairnessMap.keySet().forEach(sKey -> requestMap.put(sKey, requestBuffer.duplicate()));
 
         // Number of expected responses for each memcached server connected to and mark them all active
-        HashMap<SelectionKey, Integer> expectedResponseCount = new HashMap<>(MemcachedHandler.memcachedServers.size());
+        HashMap<SelectionKey, Long> expectedResponseCount = new HashMap<>(MemcachedHandler.memcachedServers.size());
         this.memcachedSelector.keys().forEach(sKey -> {
-                    expectedResponseCount.put(sKey, 1);
+                    expectedResponseCount.put(sKey, 1L);
                     addToInterestSet(sKey, SelectionKey.OP_WRITE);
                 }
         );
@@ -414,11 +424,11 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
      * @throws IOException Upon communication failure.
      */
     private List<WorkUnit> memcachedCommunication(WorkUnitType type, Map<SelectionKey, ByteBuffer> toSend,
-                                                  Map<SelectionKey, Integer> expectedResponsesCount) throws IOException
+                                                  Map<SelectionKey, Long> expectedResponsesCount) throws IOException
     {
-        int numberOfResponses = expectedResponsesCount.values().stream().mapToInt(Integer::intValue).sum();
+        long numberOfResponses = expectedResponsesCount.values().stream().mapToLong(Long::longValue).sum();
 
-        List<WorkUnit> result = new ArrayList<>(numberOfResponses);
+        List<WorkUnit> result = new ArrayList<>((int) numberOfResponses);
         int actualResponseCount = 0;
 
         HashMap<SelectionKey, Long> memcachedTimings = new HashMap<>();
@@ -503,7 +513,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                                             }
                                         }
                                         actualResponseCount += expectedResponsesCount.get(key);
-                                        expectedResponsesCount.put(key, 0);
+                                        expectedResponsesCount.put(key, 0L);
 
                                         // Remove the key from the interest set as no further replies expected.
                                         removeFromInterestSet(key, SelectionKey.OP_READ);
@@ -638,9 +648,9 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
      */
     private SelectionKey getNextServer()
     {
-        int minimum = Collections.min(this.fairnessMap.values());
+        long minimum = Collections.min(this.fairnessMap.values());
         SelectionKey last = null;
-        for (Map.Entry<SelectionKey, Integer> entry : this.fairnessMap.entrySet()) {
+        for (Map.Entry<SelectionKey, Long> entry : this.fairnessMap.entrySet()) {
             if (entry.getValue() == minimum) {
                 return entry.getKey();
             }
@@ -655,18 +665,18 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
      * Helper method for single invocations of fixed-length input to know which memcached gets the query next based on
      * fairness.
      */
-    private Map<SelectionKey, Integer> loadBalancer(int numberOfRequests)
+    private Map<SelectionKey, Long> loadBalancer(int numberOfRequests)
     {
-        int availableRequests = numberOfRequests;
-        HashMap<SelectionKey, Integer> result = new HashMap<>(MemcachedHandler.memcachedServers.size());
-        this.fairnessMap.keySet().forEach(sKey -> result.put(sKey, 0));
+        long availableRequests = numberOfRequests;
+        HashMap<SelectionKey, Long> result = new HashMap<>(MemcachedHandler.memcachedServers.size());
+        this.fairnessMap.keySet().forEach(sKey -> result.put(sKey, 0L));
 
         if (MemcachedHandler.memcachedServers.size() == 1) {
             SelectionKey temp = getNextServer();
-            result.merge(temp, 1, Integer::sum);
+            result.merge(temp, 1L, Long::sum);
         } else if (MemcachedHandler.memcachedServers.size() == 2) {
-            Map.Entry<SelectionKey, Integer> min, max;
-            ArrayList<Map.Entry<SelectionKey, Integer>> arrayEntry = new ArrayList<>(2);
+            Map.Entry<SelectionKey, Long> min, max;
+            ArrayList<Map.Entry<SelectionKey, Long>> arrayEntry = new ArrayList<>(2);
             arrayEntry.addAll(this.fairnessMap.entrySet());
 
             if (arrayEntry.get(0).getValue() > arrayEntry.get(1).getValue()) {
@@ -677,26 +687,26 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                 max = arrayEntry.get(1);
             }
 
-            int deltaMaxMin = max.getValue() - min.getValue();
+            long deltaMaxMin = max.getValue() - min.getValue();
 
             if (deltaMaxMin >= availableRequests) {
                 // We cannot even fairly distribute to one server... Try best effort
                 this.logger.log(Level.TRACE, "Load balancing unsuccessful. Best effort following.");
-                result.merge(min.getKey(), availableRequests, Integer::sum);
+                result.merge(min.getKey(), availableRequests, Long::sum);
                 return result;
             }
 
             availableRequests -= deltaMaxMin;
-            result.merge(min.getKey(), deltaMaxMin, Integer::sum);
+            result.merge(min.getKey(), deltaMaxMin, Long::sum);
 
-            int splitMin = availableRequests / 2;
-            int splitMax = ((availableRequests % 2) == 1) ? splitMin + 1 : splitMin;
+            long splitMin = availableRequests / 2;
+            long splitMax = ((availableRequests % 2) == 1) ? splitMin + 1 : splitMin;
             this.logger.log(Level.TRACE, "Load balancing sharded reads amongs memcached servers.");
-            result.merge(min.getKey(), splitMin, Integer::sum);
-            result.merge(max.getKey(), splitMax, Integer::sum);
+            result.merge(min.getKey(), splitMin, Long::sum);
+            result.merge(max.getKey(), splitMax, Long::sum);
         } else {
-            Map.Entry<SelectionKey, Integer> min, mid, max, temp;
-            ArrayList<Map.Entry<SelectionKey, Integer>> arrayEntry = new ArrayList<>(3);
+            Map.Entry<SelectionKey, Long> min, mid, max, temp;
+            ArrayList<Map.Entry<SelectionKey, Long>> arrayEntry = new ArrayList<>(3);
             arrayEntry.addAll(this.fairnessMap.entrySet());
 
             if (arrayEntry.get(1).getValue() > arrayEntry.get(2).getValue()) {
@@ -719,27 +729,27 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
             mid = arrayEntry.get(1);
             min = arrayEntry.get(0);
 
-            int deltaMidMin = mid.getValue() - min.getValue();
+            long deltaMidMin = mid.getValue() - min.getValue();
 
             if (deltaMidMin >= availableRequests) {
                 // We cannot even fairly distribute to one server... Try best effort
                 this.logger.log(Level.TRACE, "Load balancing unsuccessful. Best effort following.");
-                result.merge(min.getKey(), availableRequests, Integer::sum);
+                result.merge(min.getKey(), availableRequests, Long::sum);
                 return result;
             }
 
             availableRequests -= deltaMidMin;
-            result.merge(min.getKey(), deltaMidMin, Integer::sum);
+            result.merge(min.getKey(), deltaMidMin, Long::sum);
 
-            int deltaMaxMid = max.getValue() - mid.getValue();
-            int splitMin, splitMid, splitMax;
+            long deltaMaxMid = max.getValue() - mid.getValue();
+            long splitMin, splitMid, splitMax;
             if (deltaMaxMid >= availableRequests) {
                 // We cannot balance nicely the rest of requests to the two smallest buckets
                 splitMin = deltaMaxMid / 2;
                 splitMid = ((deltaMaxMid % 2) == 1) ? splitMin + 1 : splitMin;
                 this.logger.log(Level.TRACE, "Load balancing unsuccessful. Best effort following.");
-                result.merge(min.getKey(), splitMin, Integer::sum);
-                result.merge(mid.getKey(), splitMid, Integer::sum);
+                result.merge(min.getKey(), splitMin, Long::sum);
+                result.merge(mid.getKey(), splitMid, Long::sum);
                 return result;
             }
 
@@ -755,9 +765,9 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                 splitMax = splitMin - 1;
             }
             this.logger.log(Level.TRACE, "Load balancing sharded reads amongst memcached servers.");
-            result.merge(min.getKey(), splitMin, Integer::sum);
-            result.merge(mid.getKey(), splitMid, Integer::sum);
-            result.merge(max.getKey(), splitMax, Integer::sum);
+            result.merge(min.getKey(), splitMin, Long::sum);
+            result.merge(mid.getKey(), splitMid, Long::sum);
+            result.merge(max.getKey(), splitMax, Long::sum);
         }
 
         return result;
@@ -793,7 +803,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
             this.packetParsers.put(remoteAddress, packetParser);
 
             // Register the socketChannel to this instances' memcachedSelector
-            this.fairnessMap.put(socketChannel.register(this.memcachedSelector, interestSet, packetParser), 0);
+            this.fairnessMap.put(socketChannel.register(this.memcachedSelector, interestSet, packetParser), 0L);
             this.logger.info("Thread {} connected to server {}", this.id, memcachedServer.toString());
         }
     }

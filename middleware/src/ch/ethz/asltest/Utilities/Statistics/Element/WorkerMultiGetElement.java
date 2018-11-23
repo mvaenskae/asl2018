@@ -1,18 +1,23 @@
 package ch.ethz.asltest.Utilities.Statistics.Element;
 
 import ch.ethz.asltest.Utilities.Statistics.Containers.AccumulationStatistics;
-import ch.ethz.asltest.Utilities.Statistics.Containers.AverageIntegerStatistics;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 public final class WorkerMultiGetElement extends WorkerGetElement {
 
     // Keep track of the following averages:
-    private final AccumulationStatistics keySizeCounter; // Obviously wrong as we are not counting stuff here... *sigh*
+    private final AccumulationStatistics keySizeCounter;
+    private final HashMap<String, Long> requestsPerServer = new HashMap<>();
+
+    // Final variables only to be computed for the summary of this element.
+    private long finalKeySizes;
+    private final HashMap<String, Double> finalAverageKeysPerServer = new HashMap<>();
 
     public WorkerMultiGetElement() {
         super();
@@ -23,6 +28,11 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
     {
         super(placeholder);
         keySizeCounter = new AccumulationStatistics(placeholder);
+    }
+
+    public void recordServerLoad(HashMap<String, Long> distributedGets)
+    {
+        requestsPerServer.putAll(distributedGets);
     }
 
     public void recordKeySize(long timestamp, long keySize)
@@ -41,12 +51,15 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
     {
         super.merge(other);
         this.keySizeCounter.addOther(other.keySizeCounter);
+        other.requestsPerServer.forEach((key, value) -> this.requestsPerServer.merge(key, value, Long::sum));
+
     }
 
     public void addOtherWeighted(WorkerMultiGetElement other, int weighting)
     {
         super.addOtherWeighted(other, weighting);
         this.keySizeCounter.addOther(other.keySizeCounter);
+        other.requestsPerServer.forEach((key, value) -> this.requestsPerServer.merge(key, value, Long::sum));
     }
 
     public void disableStatistics()
@@ -61,9 +74,9 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
         return super.toString();
     }
 
-    public void printStatistics(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
+    public void printWindowStatistics(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
     {
-        super.printStatistics(basedirectoryPath, prefix, useSTDOUT);
+        super.printWindowStatistics(basedirectoryPath, prefix, useSTDOUT);
 
         Path filename = Paths.get(basedirectoryPath.toString(), prefix+"keySizeCounter.txt");
         keySizeCounter.printStatistics(filename, useSTDOUT);
@@ -133,5 +146,43 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
         );
 
         return csvLayout;
+    }
+
+    void getSummary()
+    {
+        finalOpCount = numberOfOps.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).sum();
+        finalAverageWaitingTimeQueue = averageWaitingTimeQueue.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
+        finalAverageServiceTimeMemcached = averageServiceTimeMemcached.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
+        finalAverageRTT = averageRTT.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
+        finalKeySizes = keySizeCounter.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).sum();
+        requestsPerServer.forEach((key, value) -> {
+            double temp = ((double) value) / finalOpCount;
+            if (!Double.isFinite(temp)) {
+                temp = 0.0;
+            }
+            this.finalAverageKeysPerServer.put(key, temp);
+        });
+
+        double totalMissCount = memcachedMisses.getWindowAverages().stream().mapToDouble(value -> value.getValue().longValue()).sum();
+
+        double temp = totalMissCount / finalKeySizes;
+        if (!Double.isFinite(temp)) {
+            temp = 0.0;
+        }
+        finalMemcachedMissRate = temp;
+    }
+
+    protected String getTotalsAsString()
+    {
+        StringBuilder keysPerServer = new StringBuilder();
+        finalAverageKeysPerServer.forEach((key, value) -> keysPerServer.append(value).append(" "));
+        keysPerServer.deleteCharAt(keysPerServer.length()-1);
+
+        double perWindowKeySizes = ((double) finalKeySizes) / numberOfOps.getWindowAverages().size();
+        if (!Double.isFinite(perWindowKeySizes)) {
+            perWindowKeySizes = 0.0;
+        }
+
+        return super.getTotalsAsString() + finalKeySizes + " " + perWindowKeySizes + NEW_LINE + keysPerServer.toString() + NEW_LINE;
     }
 }

@@ -3,15 +3,20 @@ package ch.ethz.asltest.Utilities.Statistics.Element;
 import ch.ethz.asltest.Utilities.Statistics.Containers.CounterStatistics;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 public class WorkerGetElement extends WorkerElement {
 
     // Keep track of the following averages:
     final CounterStatistics memcachedMisses;
+
+    // Final variables only to be computed for the summary of this element.
+    double finalMemcachedMissRate;
 
     public WorkerGetElement() {
         super();
@@ -24,7 +29,7 @@ public class WorkerGetElement extends WorkerElement {
         memcachedMisses = new CounterStatistics(placeholder);
     }
 
-    public void cacheMiss(long timestamp, int missCount)
+    public void cacheMiss(long timestamp, long missCount)
     {
         this.memcachedMisses.addElement(timestamp, missCount);
     }
@@ -58,9 +63,9 @@ public class WorkerGetElement extends WorkerElement {
         return super.toString();
     }
 
-    public void printStatistics(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
+    public void printWindowStatistics(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
     {
-        super.printStatistics(basedirectoryPath, prefix, useSTDOUT);
+        super.printWindowStatistics(basedirectoryPath, prefix, useSTDOUT);
 
         Path filename = Paths.get(basedirectoryPath.toString(), prefix+"missCount.txt");
         memcachedMisses.printStatistics(filename, useSTDOUT);
@@ -90,5 +95,26 @@ public class WorkerGetElement extends WorkerElement {
         );
 
         return csvLayout;
+    }
+
+    void getSummary()
+    {
+        super.getSummary();
+        double totalMissCount = memcachedMisses.getWindowAverages().stream().mapToDouble(value -> value.getValue().longValue()).sum();
+        double temp = totalMissCount / finalOpCount;
+        if (!Double.isFinite(temp)) {
+            temp = 0.0;
+        }
+        finalMemcachedMissRate = temp;
+    }
+
+    protected String getTotalsAsString()
+    {
+        double perWindowMissRate = ((double) finalMemcachedMissRate) / memcachedMisses.getWindowAverages().size();
+        if (!Double.isFinite(perWindowMissRate)) {
+            perWindowMissRate = 0.0;
+        }
+
+        return super.getTotalsAsString() + finalMemcachedMissRate + " " + perWindowMissRate + NEW_LINE;
     }
 }

@@ -25,6 +25,11 @@ public abstract class WorkerElement extends StatisticsElement {
     protected final AverageIntegerStatistics averageServiceTimeMemcached;
     protected final AverageIntegerStatistics averageRTT;
 
+    // Final variables only to be computed for the summary of this element.
+    long finalOpCount;
+    double finalAverageWaitingTimeQueue;
+    double finalAverageServiceTimeMemcached;
+    double finalAverageRTT;
 
     // Each bucket is in the range of [index - 1 * 100µs, index * 100µs) for index > 1.
     protected final long[] histogram = new long[BUCKET_COUNT];
@@ -120,7 +125,7 @@ public abstract class WorkerElement extends StatisticsElement {
         histogram[(int) bucket]++;
     }
 
-    public void printStatistics(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
+    public void printWindowStatistics(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
     {
         Path filename = Paths.get(basedirectoryPath.toString(), prefix+"opCount.txt");
         numberOfOps.printStatistics(filename, useSTDOUT);
@@ -136,7 +141,7 @@ public abstract class WorkerElement extends StatisticsElement {
 
         filename = Paths.get(basedirectoryPath.toString(), prefix+"histogram.txt");
         String temp = IntStream.range(0, histogram.length)
-                .mapToObj(bucket -> String.format("%f, %d\n", ((double) bucket) / 10, histogram[bucket])).collect(Collectors.joining());
+                .mapToObj(bucket -> String.format("%f, %d%s", ((double) bucket) / 10, histogram[bucket], NEW_LINE)).collect(Collectors.joining());
         if (useSTDOUT) {
             System.out.println(temp);
         } else {
@@ -179,15 +184,27 @@ public abstract class WorkerElement extends StatisticsElement {
 
         StringBuilder csvBuilder = new StringBuilder();
         ArrayList<Double> line;
+        boolean header = false;
         for (Map.Entry<Double, ArrayList<Double>> doubleArrayListEntry : sortedList) {
             StringBuilder lineBuilder = new StringBuilder();
             line = doubleArrayListEntry.getValue();
+            if (header) {
+                header = false;
+                lineBuilder.append("Window, QueryCount, QueueWaitingTime, MemcachedWaitingTime, TimeInMiddleware");
+                if (line.size() > 5) {
+                    lineBuilder.append(", MissCounts");
+                    if (line.size() > 6) {
+                        lineBuilder.append(", KeyCount");
+                    }
+                }
+                lineBuilder.append(NEW_LINE);
+            }
             csvBuilder.append(doubleArrayListEntry.getKey()).append(", ");
             lineBuilder.append(line.get(0));
             for (int j = 1; j < line.size(); ++j) {
                 lineBuilder.append(", ").append(line.get(j));
             }
-            csvBuilder.append(lineBuilder.toString()).append("\n");
+            csvBuilder.append(lineBuilder.toString()).append(NEW_LINE);
         }
 
         if (useSTDOUT) {
@@ -196,6 +213,40 @@ public abstract class WorkerElement extends StatisticsElement {
             byte[] csvBytes = csvBuilder.toString().getBytes();
             Path csvStatisticsFile = Files.createFile(filename);
             Files.write(csvStatisticsFile, csvBytes);
+        }
+    }
+
+    void getSummary()
+    {
+        finalOpCount = numberOfOps.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).sum();
+        finalAverageWaitingTimeQueue = averageWaitingTimeQueue.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
+        finalAverageServiceTimeMemcached = averageServiceTimeMemcached.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
+        finalAverageRTT = averageRTT.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
+    }
+
+    protected String getTotalsAsString()
+    {
+        double perWindowOpCount = ((double) finalOpCount) / numberOfOps.getWindowAverages().size();
+        if (!Double.isFinite(perWindowOpCount)) {
+            perWindowOpCount = 0.0;
+        }
+        return "" + finalOpCount + " " + perWindowOpCount + NEW_LINE +
+                finalAverageWaitingTimeQueue + NEW_LINE +
+                finalAverageServiceTimeMemcached + NEW_LINE +
+                finalAverageRTT + NEW_LINE;
+    }
+
+    public void printSummary(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
+    {
+        getSummary();
+        String totals = getTotalsAsString();
+
+        Path filename = Paths.get(basedirectoryPath.toString(), prefix+"summary.txt");
+        if (useSTDOUT) {
+            System.out.println(totals);
+        } else {
+            byte[] totalsBytes = totals.getBytes();
+            Files.write(filename, totalsBytes);
         }
     }
 }
