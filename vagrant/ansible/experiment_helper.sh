@@ -169,14 +169,13 @@ function subexperiment_51()
     HOSTS_FILE="inventory/task51.ini"
 
     base="5.1:"
-    thread_count=0
     for key_size in 1 3 6 9; do
         str1="$base SHARDED GET (${key_size})"
-        str2="$str1 using ${thread_count} middleware threads"
+        str2="$str1 using 16 middleware threads"
         for rep_count in 1 2 3; do
             str3="$str2 repetition ${rep_count}/3"
             echo "$str3 for 2 clients"
-            LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} type=SHARDED_${key_size} set_ratio=0 get_ratio=${key_size} multiget_count=${key_size}"
+            LOOP_EXPERIMENT_VARS="repetition=${rep_count} type=SHARDED_${key_size} set_ratio=0 get_ratio=${key_size} multiget_count=${key_size}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/start_memtier.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
@@ -191,14 +190,13 @@ function subexperiment_52()
     HOSTS_FILE="inventory/task52.ini"
 
     base="5.2:"
-    thread_count=0
     for key_size in 1 3 6 9; do
         str1="$base MULTIGET (${key_size})"
-        str2="$str1 using ${thread_count} middleware threads"
+        str2="$str1 using 16 middleware threads"
         for rep_count in 1 2 3; do
             str3="$str2 repetition ${rep_count}/3"
             echo "$str3 for 2 clients"
-            LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} type=MULTIGET_${key_size} set_ratio=0 get_ratio=${key_size} multiget_count=${key_size}"
+            LOOP_EXPERIMENT_VARS="repetition=${rep_count} type=MULTIGET_${key_size} set_ratio=0 get_ratio=${key_size} multiget_count=${key_size}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/start_memtier.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
@@ -239,14 +237,14 @@ function subexperiment_60()
                         for memcached_count in 1 3; do
 
                             if [[ $memcached_count -eq 1 ]]; then
-                                HOSTS_FILE="${HOSTS_FILE_STEM}_1.ini"
-                                str4="$str3 connected to 1 memcached server."
+                                HOSTS_FILE="${HOSTS_FILE_STEM}-1.ini"
+                                str5="$str4 connected to 1 memcached server."
                             else
-                                HOSTS_FILE="${HOSTS_FILE_STEM}_3.ini"
-                                str4="$str3 connected to 3 memcached servers."
+                                HOSTS_FILE="${HOSTS_FILE_STEM}-3.ini"
+                                str5="$str4 connected to 3 memcached servers."
                             fi
 
-                            echo $str4
+                            echo $str5
 
                             if [[ "${is_read}" == true ]]; then
                                 LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} type=GET set_ratio=0 get_ratio=1"
@@ -313,7 +311,7 @@ function experiment_6() # 2K Analysis Wrapper
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
 }
 
-function environment_setup() # Setup the environment for upcoming experiments
+function setup_for_experiments() # Setup the environment for upcoming experiments
 {
     echo "Setting up environment"
     ansible-playbook -i hosts.ini ./playbooks/server/restart_memcached.yml
@@ -323,7 +321,7 @@ function environment_setup() # Setup the environment for upcoming experiments
     ansible-playbook -i hosts.ini ./playbooks/client/populate_memcaches.yml
 }
 
-function environment_provision() # Provision all machines
+function provision_machines() # Provision all machines
 {
     echo "Provisioning machines"
     ansible-playbook -i hosts.ini ./playbooks/provision_machines.yml
@@ -331,7 +329,7 @@ function environment_provision() # Provision all machines
 
 function experiments_full() # Run experiments on already provisioned machines
 {
-    environment_setup
+    setup_for_experiments
     experiment_2
     experiment_3
     experiment_4
@@ -341,7 +339,7 @@ function experiments_full() # Run experiments on already provisioned machines
 
 function experiments_scratch() # Run experiments on a fresh set of machines
 {
-    environment_provision
+    provision_machines
     experiments_full
 }
 
