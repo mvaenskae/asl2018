@@ -3,7 +3,7 @@
   become: true
 
   tasks:
-  - name: Installing backend software (Ubuntu)
+  - name: Installing required software (Ubuntu)
     apt:
         name: "{{ packages }}"
         state: present
@@ -15,11 +15,16 @@
         - iperf
         - rsync
 
-  - name: Make memcache listen on ANY interface
+  - name: Make memcached listen on ANY interface
     replace:
         dest: /etc/memcached.conf
         regexp: '^-l 127.0.0.1'
         replace: '#-l 127.0.0.1'
+
+  - name: Make memcached single threaded
+    lineinfile:
+        dest: /etc/memcached.conf
+        line: '-t 1 # Run memcached single threaded'
 
   - name: "Starting memcached"
     systemd:
