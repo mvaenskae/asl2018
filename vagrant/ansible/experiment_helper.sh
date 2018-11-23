@@ -224,37 +224,37 @@ function subexperiment_60()
             str2="$str1 using ${thread_count} middleware threads"
             for rep_count in 1 2 3; do
                 str3="$str2 repetition ${rep_count}/3"
-                    for middleware_count in 1 2; do
+                for middleware_count in 1 2; do
 
-                        if [[ $middleware_count -eq 1 ]]; then
-                            HOSTS_FILE_STEM="inventory/task60_1"
-                            str4="$str3 with 1 middleware"
+                    if [[ $middleware_count -eq 1 ]]; then
+                        HOSTS_FILE_STEM="inventory/task60_1"
+                        str4="$str3 with 1 middleware"
+                    else
+                        HOSTS_FILE_STEM="inventory/task60_2"
+                        str4="$str3 with 2 middlewares"
+                    fi
+
+                    for memcached_count in 1 3; do
+
+                        if [[ $memcached_count -eq 1 ]]; then
+                            HOSTS_FILE="${HOSTS_FILE_STEM}-1.ini"
+                            str5="$str4 connected to 1 memcached server."
                         else
-                            HOSTS_FILE_STEM="inventory/task60_2"
-                            str4="$str3 with 2 middlewares"
+                            HOSTS_FILE="${HOSTS_FILE_STEM}-3.ini"
+                            str5="$str4 connected to 3 memcached servers."
                         fi
 
-                        for memcached_count in 1 3; do
+                        echo $str5
 
-                            if [[ $memcached_count -eq 1 ]]; then
-                                HOSTS_FILE="${HOSTS_FILE_STEM}-1.ini"
-                                str5="$str4 connected to 1 memcached server."
-                            else
-                                HOSTS_FILE="${HOSTS_FILE_STEM}-3.ini"
-                                str5="$str4 connected to 3 memcached servers."
-                            fi
+                        if [[ "${is_read}" == true ]]; then
+                            LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} type=GET set_ratio=0 get_ratio=1"
+                        else
+                            LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} type=SET set_ratio=1 get_ratio=0"
+                        fi
 
-                            echo $str5
-
-                            if [[ "${is_read}" == true ]]; then
-                                LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} type=GET set_ratio=0 get_ratio=1"
-                            else
-                                LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} type=SET set_ratio=1 get_ratio=0"
-                            fi
-
-                            ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
-                            ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/start_memtier.yml -e "${LOOP_EXPERIMENT_VARS}"
-                            ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
+                        ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
+                        ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/start_memtier.yml -e "${LOOP_EXPERIMENT_VARS}"
+                        ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
                         sleep 1
                     done
                 done
@@ -271,6 +271,9 @@ function experiment_2() # Baseline without Middleware Wrapper
     subexperiment_22
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+
+    echo "Sleeping Some"
+    sleep 10
 }
 
 function experiment_3() # Baseline with Middleware Wrapper
@@ -281,6 +284,9 @@ function experiment_3() # Baseline with Middleware Wrapper
     subexperiment_32
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+
+    echo "Sleeping Some"
+    sleep 10
 }
 
 function experiment_4() # Throughput for Writes Wrapper
@@ -290,6 +296,9 @@ function experiment_4() # Throughput for Writes Wrapper
     subexperiment_40
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+
+    echo "Sleeping Some"
+    sleep 10
 }
 
 function experiment_5() # Gets and Multi-gets Wrapper
@@ -300,6 +309,9 @@ function experiment_5() # Gets and Multi-gets Wrapper
     subexperiment_52
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+
+    echo "Sleeping Some"
+    sleep 10
 }
 
 function experiment_6() # 2K Analysis Wrapper
@@ -309,22 +321,33 @@ function experiment_6() # 2K Analysis Wrapper
     subexperiment_60
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+
+    echo "Sleeping Some"
+    sleep 10
 }
 
 function setup_for_experiments() # Setup the environment for upcoming experiments
 {
     echo "Setting up environment"
+
     ansible-playbook -i hosts.ini ./playbooks/server/restart_memcached.yml
     ansible-playbook -i hosts.ini ./playbooks/middleware/update_jar.yml
     ansible-playbook -i hosts.ini ./playbooks/middleware/send_helper.yml
     ansible-playbook -i hosts.ini ./playbooks/client/send_helper.yml
     ansible-playbook -i hosts.ini ./playbooks/client/populate_memcaches.yml
+
+    echo "Sleeping Some"
+    sleep 5
 }
 
 function provision_machines() # Provision all machines
 {
     echo "Provisioning machines"
+
     ansible-playbook -i hosts.ini ./playbooks/provision_machines.yml
+
+    echo "Sleeping Some"
+    sleep 5
 }
 
 function experiments_full() # Run experiments on already provisioned machines

@@ -1,5 +1,5 @@
 ---
-- name: Provisioning machines
+- name: Provisioning Machines
   hosts: all
 
 - import_playbook: server/provision_memcache.yml

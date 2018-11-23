@@ -1,13 +1,14 @@
 ---
-- hosts: middleware
+- name: Provisioning Middleware Machines For Experiments
+  hosts: middleware
   become: true
 
   tasks:
-  - name: Installing middleware packages (Ubuntu)
+  - name: Installing System Software
     apt:
-     name: "{{ packages }}"
-     update_cache: yes
-     state: present
+        name: "{{ packages }}"
+        update_cache: yes
+        state: present
     vars:
         packages:
         - openjdk-8-jdk-headless

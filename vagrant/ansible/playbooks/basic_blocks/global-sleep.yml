@@ -1,4 +1,4 @@
 ---
-- name: Sleeping 2 seconds
+- name: Sleeping 2 Seconds
   pause:
       seconds: 2

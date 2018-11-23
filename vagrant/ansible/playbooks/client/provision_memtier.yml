@@ -1,8 +1,9 @@
 ---
-- hosts: client
+- name: Provisioning Client Machines For Experiments
+  hosts: client
 
   tasks:
-  - name: Installing client software (Ubuntu)
+  - name: Installing System Software
     become: true
     apt:
         name: "{{ packages }}"
@@ -22,7 +23,7 @@
         - iperf
         - rsync
 
-  - name: Downloading memtier sources
+  - name: Downloading memtier (v1.2.15)
     git:
         repo: "https://github.com/RedisLabs/memtier_benchmark"
         dest: ~/memtier_benchmark

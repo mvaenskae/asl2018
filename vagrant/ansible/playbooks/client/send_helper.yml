@@ -1,9 +1,9 @@
 ---
-- name: Sending instrumentation helper
+- name: Update memtier Helper Script
   hosts: client
 
   tasks:
-    - name: Pushing to host
+    - name: Pushing To Host
       copy:
         src: ../../files/memtier_helper.sh
         dest: "~"

@@ -1,5 +1,5 @@
 ---
-- name: Generate log directory
+- name: Generating log Directory
   file:
       path: "{{ log_base }}"
       state: directory

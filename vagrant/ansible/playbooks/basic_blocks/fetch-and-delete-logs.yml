@@ -1,22 +1,19 @@
 ---
-- hosts: all
+- name: Pulling logs From Machines
+  hosts: all
   vars_files:
       - ../constants.yml
 
   tasks:
-    - name: Retrieving logs from machine
+    - name: Copying logs From Remote
       ignore_errors: yes
       synchronize:
           mode: pull
           src: "{{ log_dir }}"
           dest: ~/
 
-    - name: Deleting logs on machine
+    - name: Deleting logs On Remote
       ignore_errors: yes
       file:
           path: ~/logs
           state: absent
-
-# - name: Sleeping 2 seconds
-#   pause:
-#       seconds: 2

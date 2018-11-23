@@ -1,9 +1,9 @@
 ---
-- name: Sending instrumentation helper
+- name: Update middleware Helper Script
   hosts: middleware
 
   tasks:
-    - name: Pushing to host
+    - name: Pushing To Host
       copy:
         src: ../../files/middleware_helper.sh
         dest: "~"

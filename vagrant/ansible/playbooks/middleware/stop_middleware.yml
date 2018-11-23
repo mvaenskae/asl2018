@@ -1,13 +1,11 @@
 ---
-- name: Terminate Middleware
+- name: Stopping Middleware
   hosts: middleware
   vars_files:
       - ../constants.yml
 
   tasks:
-    # - import_tasks: ../basic_blocks/create-logdir.yml
-
-    - name: Getting Middleware process ID
+    - name: Getting Middleware's PID
       shell: "ps -ef | grep -v grep | grep -v bash | grep -w middleware-mickeyv.jar | awk '{print $2}'"
       register: middleware_pid
 
@@ -15,7 +13,7 @@
       shell: "ps -ef | grep -v grep | grep -w bash | grep -w middleware-mickeyv.jar | awk '{print $2}'"
       register: helper_pid
 
-    - name: Killing Middleware
+    - name: Stopping Middleware
       command: "kill {{ item }}"
       with_items: "{{ middleware_pid.stdout_lines }}"
 
@@ -24,19 +22,17 @@
       wait_for:
         path: "/proc/{{ item }}/status"
         state: absent
-        connect_timeout: 2
+        connect_timeout: 1
         timeout: 10
       with_items: "{{ helper_pid.stdout_lines }}"
       ignore_errors: yes
       register: killed_processes
 
-    - name: Forcefully kill the middleware (if needed)
+    - name: Killing Middleware
       command: "kill -9 {{ item }}"
       with_items: "{{ killed_processes.results | select('failed') | map(attribute='item') | list }}"
 
-    - import_tasks: ../basic_blocks/global-sleep.yml
+    # - import_tasks: ../basic_blocks/global-sleep.yml
 
     # - name: Moving log to logging directory
     #   shell: "mv mw-stats {{ log_middleware }}"
-
-    # - import_tasks: ../basic_blocks/global-sleep.yml

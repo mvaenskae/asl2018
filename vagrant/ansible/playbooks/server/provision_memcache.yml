@@ -1,9 +1,10 @@
 ---
-- hosts: server
+- name: Provisioning Server Machines For Experiments
+  hosts: server
   become: true
 
   tasks:
-  - name: Installing required software (Ubuntu)
+  - name: Installing System Software
     apt:
         name: "{{ packages }}"
         state: present
@@ -15,19 +16,19 @@
         - iperf
         - rsync
 
-  - name: Make memcached listen on ANY interface
+  - name: Reconfigure memcached To Listen To Any Interface
     replace:
         dest: /etc/memcached.conf
         regexp: '^-l 127.0.0.1'
         replace: '#-l 127.0.0.1'
 
-  - name: Make memcached single threaded
+  - name: Reconfigure memcached For Single-Threaded Mode
     lineinfile:
         dest: /etc/memcached.conf
         line: '-t 1 # Run memcached single threaded'
 
-  - name: "Starting memcached"
+  - name: Restarting Memcached
     systemd:
         name: memcached
         enabled: yes
-        state: started
+        state: restarted

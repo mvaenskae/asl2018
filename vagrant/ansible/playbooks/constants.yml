@@ -6,7 +6,7 @@ maximum_key_size: 10000
 maximum_data_size: 4096
 
 # Experiments
-test_duration: 5
+test_duration: 65
 
 # Middleware
 mw_jar_path: "~"

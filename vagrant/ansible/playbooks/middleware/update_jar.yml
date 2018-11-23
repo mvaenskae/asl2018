@@ -5,7 +5,7 @@
       - ../constants.yml
 
   tasks:
-    - name: Pushing to server
+    - name: Pushing To Host
       synchronize:
         src: ../../../../middleware/dist/middleware-mickeyv.jar
         dest: "{{ mw_jar_path }}"
