@@ -425,7 +425,8 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
         HashMap<SelectionKey, Tuple<Long, Long>> memcachedDeltas = new HashMap<>();
         boolean firstMessageStartedSending = false;
 
-        logger.log(Level.DEBUG, "CACHED: Sending to memcached...");
+        logger.log(Level.DEBUG,  "CACHED: Distributing '{}' to memcached and waiting for {} total response(s).",
+                this.workItem.type, numberOfResponses);
         while (actualResponseCount < numberOfResponses) {
             try {
                 this.memcachedSelector.select();
@@ -467,9 +468,11 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                         // Expecting responses from memcached
                         List<WorkUnit> completeRequest = ((PacketParser) key.attachment()).receiveAndParse(key);
 
-                        if (completeRequest != null) {
+                        if (completeRequest != null && completeRequest.size() > 0) {
                             // Some replies from memcached were received
                             long maybeFinished = System.nanoTime();
+                            logger.log(Level.INFO, "Got {} elements from {}.", completeRequest.size(),
+                                    ((SocketChannel) key.channel()).getRemoteAddress());
 
                             // Disregard illegal replies from memcached (i.e. too many replies sent)
                             if (expectedResponsesCount.get(key) > 0 &&
@@ -481,7 +484,10 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                                 result.addAll(completeRequest);
 
                                 if (type == WorkUnitType.GET && expectedResponsesCount.get(key) > 0) {
-                                    if (result.stream().anyMatch(unit -> unit.type == WorkUnitType.END)) {
+                                    if (completeRequest.stream().anyMatch(unit -> unit.type == WorkUnitType.END)) {
+                                        this.logger.log(Level.DEBUG, "{} encountered {} key misses.",
+                                                ((SocketChannel) key.channel()).getRemoteAddress(),
+                                                expectedResponsesCount.get(key));
                                         // memcached server doesn't have all keys and indicated End of Transfer.
                                         long memcachedStarted = memcachedTimings.get(key);
                                         memcachedDeltas.put(key, new Tuple<>(maybeFinished,
@@ -503,6 +509,8 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                                         removeFromInterestSet(key, SelectionKey.OP_READ);
                                     }
                                 } else if (expectedResponsesCount.get(key) <= 0) {
+                                    this.logger.log(Level.DEBUG, "{} sent all requested answers.",
+                                            ((SocketChannel) key.channel()).getRemoteAddress());
                                     // memcached server sent expected amount of responses, stop listening to it
                                     long memcachedStarted = memcachedTimings.get(key);
                                     memcachedDeltas.put(key, new Tuple<>(maybeFinished,
@@ -599,36 +607,6 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                     ((SocketChannel) key.channel()).getRemoteAddress());
         }
     }
-
-    /**
-     * Method which will send the list of ByteBuffers to the key's channel and returns the state as a tuple.
-     *
-     * Requires: True
-     * Ensures: If data not sent, configure key's interestSet for writing.
-     *
-     * @param toSend List of ByteBuffers to send.
-     * @param key Key on which to send.
-     * @return Tuple of the state of this method.
-     */
-//    private boolean sendBytes(ByteBuffer toSend, SelectionKey key) throws IOException
-//    {
-//        ((SocketChannel) key.channel()).write(toSend);
-//       return toSend.hasRemaining();
-
-//        ByteBuffer buffer = null;
-//        Iterator<ByteBuffer> iterator = toSend.iterator();
-//
-//        while (iterator.hasNext()) {
-//            buffer = iterator.next();
-//            ((SocketChannel) key.channel()).write(buffer);
-//
-//            if (!buffer.hasRemaining()) {
-//                iterator.remove();
-//            }
-//        }
-//
-//        return false;
-//    }
 
     /**
      * Helper method to reattach the packetParser back to the key to allow reading data correctly.
