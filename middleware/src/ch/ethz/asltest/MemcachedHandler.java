@@ -279,12 +279,16 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                     this.logger.log(Level.FATAL, "GET: memcached returned invalid packet.");
                     replyBuffer = ByteBuffer.allocateDirect(WorkUnitError.header.length);
                     replyBuffer.put(WorkUnitError.header).flip();
+                    this.logger.log(Level.DEBUG, "GET: Processed reply for memtier.");
+                    this.logger.log(Level.DEBUG, "GET: Sending reply for memtier.");
                     memtierCommunication(replyBuffer);
                     return;
                 default:
                     this.logger.log(Level.ERROR, "GET: memcached didn't like the request.");
                     replyBuffer = ByteBuffer.allocateDirect(unit.getHeader().length);
                     replyBuffer.put(unit.getHeader()).flip();
+                    this.logger.log(Level.DEBUG, "GET: Processed reply for memtier.");
+                    this.logger.log(Level.DEBUG, "GET: Sending reply for memtier.");
                     memtierCommunication(replyBuffer);
                     return;
             }
@@ -338,12 +342,16 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                     this.logger.log(Level.FATAL, "SET: memcached returned invalid packet.");
                     replyBuffer = ByteBuffer.allocateDirect(WorkUnitError.header.length);
                     replyBuffer.put(WorkUnitError.header).flip();
+                    this.logger.log(Level.DEBUG, "SET: Processed reply for memtier.");
+                    this.logger.log(Level.DEBUG, "SET: Sending reply for memtier.");
                     memtierCommunication(replyBuffer);
                     return;
                 default:
                     this.logger.log(Level.ERROR, "SET: memcached didn't like the request.");
                     replyBuffer = ByteBuffer.allocateDirect(unit.getHeader().length);
                     replyBuffer.put(unit.getHeader()).flip();
+                    this.logger.log(Level.DEBUG, "SET: Processed reply for memtier.");
+                    this.logger.log(Level.DEBUG, "SET: Sending reply for memtier.");
                     memtierCommunication(replyBuffer);
                     return;
             }
