@@ -31,8 +31,3 @@
     - name: Killing Middleware
       command: "kill -9 {{ item }}"
       with_items: "{{ killed_processes.results | select('failed') | map(attribute='item') | list }}"
-
-    # - import_tasks: ../basic_blocks/global-sleep.yml
-
-    # - name: Moving log to logging directory
-    #   shell: "mv mw-stats {{ log_middleware }}"

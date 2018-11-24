@@ -7,5 +7,3 @@
   tasks:
     - name: "Populating {{ memtier_targets }}"
       command: bash ./memtier_helper.sh --key-size {{ maximum_key_size }} --data-size {{ maximum_data_size }} --virtual-clients 1 --threads 2 --populate {{ memtier_targets }}
-
-    # - import_tasks: ../basic_blocks/global-sleep.yml
