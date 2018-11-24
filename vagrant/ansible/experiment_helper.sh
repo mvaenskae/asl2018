@@ -238,10 +238,10 @@ function subexperiment_60()
 
                         if [[ $memcached_count -eq 1 ]]; then
                             HOSTS_FILE="${HOSTS_FILE_STEM}-1.ini"
-                            str5="$str4 connected to 1 memcached server."
+                            str5="$str4 connected to 1 memcached server. -> inventory = $HOSTS_FILE"
                         else
                             HOSTS_FILE="${HOSTS_FILE_STEM}-3.ini"
-                            str5="$str4 connected to 3 memcached servers."
+                            str5="$str4 connected to 3 memcached servers. -> inventory = $HOSTS_FILE"
                         fi
 
                         echo $str5
@@ -267,10 +267,14 @@ function experiment_2() # Baseline without Middleware Wrapper
 {
     echo "Experiment 2: Baseline without Middleware"
 
+    printf "Current Time: " && date
     subexperiment_21
+    printf "Current Time: " && date
     subexperiment_22
+    printf "Current Time: " && date
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    printf "Current Time: " && date
 
     echo "Sleeping Some"
     sleep 10
@@ -280,10 +284,14 @@ function experiment_3() # Baseline with Middleware Wrapper
 {
     echo "Experiment 3: Baseline with Middleware"
 
+    printf "Current Time: " && date
     subexperiment_31
+    printf "Current Time: " && date
     subexperiment_32
+    printf "Current Time: " && date
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    printf "Current Time: " && date
 
     echo "Sleeping Some"
     sleep 10
@@ -293,9 +301,12 @@ function experiment_4() # Throughput for Writes Wrapper
 {
     echo "Experiment 4: Throughput for Writes"
 
+    printf "Current Time: " && date
     subexperiment_40
+    printf "Current Time: " && date
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    printf "Current Time: " && date
 
     echo "Sleeping Some"
     sleep 10
@@ -305,10 +316,14 @@ function experiment_5() # Gets and Multi-gets Wrapper
 {
     echo "Experiment 5: Gets and Multi-gets"
 
+    printf "Current Time: " && date
     subexperiment_51
+    printf "Current Time: " && date
     subexperiment_52
+    printf "Current Time: " && date
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    printf "Current Time: " && date
 
     echo "Sleeping Some"
     sleep 10
@@ -318,12 +333,12 @@ function experiment_6() # 2K Analysis Wrapper
 {
     echo "2K Analysis"
 
+    printf "Current Time: " && date
     subexperiment_60
+    printf "Current Time: " && date
 
     ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
-
-    echo "Sleeping Some"
-    sleep 10
+    printf "Current Time: " && date
 }
 
 function setup_for_experiments() # Setup the environment for upcoming experiments
@@ -358,6 +373,7 @@ function experiments_full() # Run experiments on already provisioned machines
     experiment_4
     experiment_5
     experiment_6
+    echo "Experiments Done!"
 }
 
 function experiments_scratch() # Run experiments on a fresh set of machines

@@ -12,12 +12,10 @@ test_duration: 65
 mw_jar_path: "~"
 mw_jar_file: "{{ mw_jar_path }}/middleware-mickeyv.jar"
 
+# Logging
+log_dir: "~/asl-logs-mickeyv"
+log_base: "{{ log_dir }}/{{ exp_id }}/{{ sub_exp }}/{{ worker_threads }}/{{ ct }}/{{ vc }}/{{ repetition }}/{{ ansible_hostname }}"
+log_path: "{{ log_base }}/{{ type }}/{{ memcached_servers }}"
 
-####################
-# LOGGING COMMANDS #
-####################
-log_dir: "~/logs"
-log_base: "{{ log_dir }}/{{ exp_id }}/{{ sub_exp }}/{{ worker_threads }}/{{ repetition }}/{{ vc }}/{{ ansible_hostname }}"
-
-base_middleware: "{{ type }}_{{ ct }}"
-log_middleware: "{{ log_base }}/{{ base_middleware}}"
+# base_middleware: "{{ type }}_{{ ct }}"
+# log_middleware: "{{ log_base }}/{{ base_middleware}}"

@@ -15,5 +15,5 @@
     - name: Deleting logs On Remote
       ignore_errors: yes
       file:
-          path: ~/logs
+          path: "{{ log_dir }}"
           state: absent

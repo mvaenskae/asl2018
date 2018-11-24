@@ -5,8 +5,8 @@
     - ../constants.yml
 
   tasks:
-    - name: "Experiment {{ exp_id }}.{{ sub_exp }} ({{ worker_threads }} | {{ vc }}/{{ repetition }}) {{ type }} @ {{ memtier_targets }}"
-      command: ./memtier_helper.sh --key-size {{ maximum_key_size }} --data-size {{ maximum_data_size }} --virtual-clients {{ vc }} --threads {{ ct }} --set-ratio {{ set_ratio }} --get-ratio {{ get_ratio }} --multiget-count {{ multiget_count }} --runtime {{ test_duration }} --log-path {{ log_base }} --log-base {{ type }} {{ memtier_targets }}
+      - name: "MT: Exp {{ exp_id }}.{{ sub_exp }} (WT={{ worker_threads }} | CT={{ ct }} VC={{ vc }} | {{ repetition }}/3) {{ type }} @ {{ memtier_targets }} (-> {{ log_path }})"
+        command: ./memtier_helper.sh --key-size {{ maximum_key_size }} --data-size {{ maximum_data_size }} --virtual-clients {{ vc }} --threads {{ ct }} --set-ratio {{ set_ratio }} --get-ratio {{ get_ratio }} --multiget-count {{ multiget_count }} --runtime {{ test_duration }} --log-path {{ log_path }} {{ memtier_targets }}
 
     # - name: Fixing history log
     #   command: perl -p -i -e 's/\r/\n/g' {{ log_memtier_stderr }}

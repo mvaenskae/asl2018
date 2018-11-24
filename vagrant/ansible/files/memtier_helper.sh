@@ -87,7 +87,7 @@ memtier_cmd()
     for server in ${SERVER_PORT_PAIR[*]}; do
         REMOTE=$( echo "$server" | cut -f1 -d: )
         PORT=$( echo "$server" | cut -f2 -d: )
-        LOGNAME="${LOG_PATH}/${LOG_BASE}_${REMOTE}_${PORT}_${VIRTUAL_CLIENTS}"
+        LOGNAME="${LOG_PATH}/${REMOTE}_${PORT}_${VIRTUAL_CLIENTS}"
         echo "Memtier talking with $REMOTE:$PORT"
         $MEMTIER_CMD --server=$REMOTE --port=$PORT > "${LOGNAME}.stdout" 2> "${LOGNAME}.stderr" &
         MEMTIER_PIDS+=($!)
@@ -97,12 +97,12 @@ memtier_cmd()
 instrumentation_cmd()
 {
     echo "Starting dstat"
-    dstat > "${LOG_PATH}/${LOG_BASE}.dstat" &
+    dstat -tcpi --ipc -ylmsd --fs -n --socket --tcp > "${LOG_PATH}/trace.dstat" &
     INSTRUMENTATION_PIDS+=($!)
 
     for server in ${SERVER_PORT_PAIR[*]}; do
         REMOTE=$( echo "$server" | cut -f1 -d: )
-        LOGNAME="${LOG_PATH}/${LOG_BASE}_${REMOTE}.ping"
+        LOGNAME="${LOG_PATH}/${REMOTE}.ping"
         echo "Pinging $REMOTE"
         ping -i 1 $REMOTE > "${LOGNAME}" &
         INSTRUMENTATION_PIDS+=($!)
@@ -114,7 +114,7 @@ fix_history()
     for server in ${SERVER_PORT_PAIR[*]}; do
         REMOTE=$( echo "$server" | cut -f1 -d: )
         PORT=$( echo "$server" | cut -f2 -d: )
-        perl -p -i -e 's/\r/\n/g' "${LOG_PATH}/${LOG_BASE}_${REMOTE}_${PORT}_${VIRTUAL_CLIENTS}".stderr
+        perl -p -i -e 's/\r/\n/g' "${LOG_PATH}/${REMOTE}_${PORT}_${VIRTUAL_CLIENTS}".stderr
     done
 }
 

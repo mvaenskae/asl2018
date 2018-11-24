@@ -89,7 +89,7 @@ middleware_cmd()
 instrumentation_cmd()
 {
     echo "Starting dstat"
-    dstat > "${LOG_PATH}/trace.dstat" &
+    dstat -tcpi --ipc -ylmsd --fs -n --socket --tcp > "${LOG_PATH}/trace.dstat" &
     INSTRUMENTATION_PIDS+=($!)
 
     for server in ${SERVER_PORT_PAIR[*]}; do
