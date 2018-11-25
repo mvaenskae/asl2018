@@ -1,4 +1,3 @@
-import os
 import re
 import sys
 
@@ -112,7 +111,7 @@ class MemtierParser:
         :param percentage_histogram: Array of tuples with percentages (non cumulative).
         :return: Array of tuples (timestamp_range, counts)
         """
-        return [(timestamp, percentage * op_count) for (timestamp, percentage) in percentage_histogram]
+        return [(timestamp, percentage/100 * op_count) for (timestamp, percentage) in percentage_histogram]
 
     @staticmethod
     def pretty_print_list(formatted_histogram):
