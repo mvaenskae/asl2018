@@ -82,7 +82,8 @@ memtier_cmd()
     for server in ${SERVER_PORT_PAIR[*]}; do
         REMOTE=$( echo "$server" | cut -f1 -d: )
         PORT=$( echo "$server" | cut -f2 -d: )
-        LOGNAME="${LOG_PATH}/${REMOTE}_${PORT}"
+        # LOGNAME="${LOG_PATH}/${REMOTE}_${PORT}"
+        LOGNAME="${LOG_PATH}/${REMOTE}"
         echo "Memtier talking with $REMOTE:$PORT"
         $MEMTIER_CMD --server=$REMOTE --port=$PORT > "${LOGNAME}.stdout" 2> "${LOGNAME}.stderr" &
         MEMTIER_PIDS+=($!)
@@ -109,7 +110,8 @@ fix_history()
     for server in ${SERVER_PORT_PAIR[*]}; do
         REMOTE=$( echo "$server" | cut -f1 -d: )
         PORT=$( echo "$server" | cut -f2 -d: )
-        perl -p -i -e 's/\r/\n/g' "${LOG_PATH}/${REMOTE}_${PORT}".stderr
+        # perl -p -i -e 's/\r/\n/g' "${LOG_PATH}/${REMOTE}_${PORT}".stderr
+        perl -p -i -e 's/\r/\n/g' "${LOG_PATH}/${REMOTE}".stderr
     done
 }
 

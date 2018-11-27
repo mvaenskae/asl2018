@@ -397,7 +397,5 @@ else
   echo "'$1' is not a known function name" >&2
   echo "Available functions are:"
   help
-  # echo "Existing functions are:"
-  # exit 1
+  exit -1
 fi
-
