@@ -59,7 +59,7 @@ function subexperiment_22()
                 if [[ "${is_read}" == true ]]; then
                     LOOP_EXPERIMENT_VARS="repetition=${rep_count} vc=${vc_count} type=GET set_ratio=0 get_ratio=1"
                 else
-                    LOOP_EXPERIMENT_VARS="repetition=${rep_count} vc=${vc_count} type=GET set_ratio=0 get_ratio=1"
+                    LOOP_EXPERIMENT_VARS="repetition=${rep_count} vc=${vc_count} type=GET set_ratio=1 get_ratio=0"
                 fi
 
                 ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/start_memtier.yml -e "${LOOP_EXPERIMENT_VARS}"
@@ -175,7 +175,7 @@ function subexperiment_51()
         for rep_count in 1 2 3; do
             str3="$str2 repetition ${rep_count}/3"
             echo "$str3 for 2 clients"
-            LOOP_EXPERIMENT_VARS="repetition=${rep_count} type=SHARDED_${key_size} set_ratio=0 get_ratio=${key_size} multiget_count=${key_size}"
+            LOOP_EXPERIMENT_VARS="repetition=${rep_count} type=SHARDED_${key_size} set_ratio=1 get_ratio=${key_size} multiget_count=${key_size}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/start_memtier.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
@@ -196,7 +196,7 @@ function subexperiment_52()
         for rep_count in 1 2 3; do
             str3="$str2 repetition ${rep_count}/3"
             echo "$str3 for 2 clients"
-            LOOP_EXPERIMENT_VARS="repetition=${rep_count} type=MULTIGET_${key_size} set_ratio=0 get_ratio=${key_size} multiget_count=${key_size}"
+            LOOP_EXPERIMENT_VARS="repetition=${rep_count} type=MULTIGET_${key_size} set_ratio=1 get_ratio=${key_size} multiget_count=${key_size}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/start_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/client/start_memtier.yml -e "${LOOP_EXPERIMENT_VARS}"
             ansible-playbook -i "${HOSTS_FILE}" ./playbooks/middleware/stop_middleware.yml -e "${LOOP_EXPERIMENT_VARS}"
