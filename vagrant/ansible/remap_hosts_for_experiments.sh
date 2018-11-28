@@ -21,18 +21,18 @@ host_ip_mapping[192.168.122.108]=10.0.0.8
 ansible_user[vagrant]=mvaenskae
 
 for c in "${!host_ip_mapping[@]}"; do
-    echo "Changing active IP from $c to ${host_ip_mapping[$c]} in inventory...."
+    echo "Changing IP from $c to ${host_ip_mapping[$c]} in inventory."
     for i in inventory/*.ini; do
         sed -i 's/'"$c"'/'"${host_ip_mapping[$c]}"'/g' $i
     done
     sed -i 's/'"$c"'/'"${host_ip_mapping[$c]}"'/g' hosts.ini
-    echo "Also adjusting log renaming helper..."
+    echo "Adjusting log renaming helper."
     sed -i 's/'"$c"'/'"${host_ip_mapping[$c]}"'/g' ./rename_logs_ips_to_hostnames.sh
 done
 
-echo "Changing active experiment SSH user..."
+echo "Changing SSH user."
 for i in inventory/*.ini; do
-    sed -i 's/'"vagrant"'/'"${host_ip_mapping[vagrant]}"'/g' $i
+    sed -i 's/'"vagrant"'/'"${ansible_user[vagrant]}"'/g' $i
 done
-sed -i 's/'"vagrant"'/'"${host_ip_mapping[vagrant]}"'/g' hosts.ini
+sed -i 's/'"vagrant"'/'"${ansible_user[vagrant]}"'/g' hosts.ini
 
