@@ -39,7 +39,6 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
     // map of packet parsers bound to each communicating party (required for attachment purposes and limits GC)
     private final Map<String, PacketParser> packetParsers = new HashMap<>(memcachedServers.size());
     // map keeping track of usage per server
-    // TODO: USE THIS AS LOAD BALANCER (ugly but we only return the total statistics for it)
     private final Map<SelectionKey, Long> fairnessMap = new HashMap<>(memcachedServers.size());
 
     // Instance-local fields, initialized at run-time

@@ -183,7 +183,7 @@ public final class MyMiddleware implements Runnable {
             try {
                 Files.createDirectory(logPath);
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.log(Level.ERROR, e.getMessage());
             }
         }
 
@@ -202,20 +202,20 @@ public final class MyMiddleware implements Runnable {
                     try {
                         Files.createDirectory(workerPath);
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        logger.log(Level.ERROR, e.getMessage());
                     }
                 }
                 workerResult.printAverageStatistics(workerPath, useSTDOUT);
                 this.mergedWorkerStatistics.addOtherWeighted(workerResult, numThreadPoolThreads);
             } catch (InterruptedException | TimeoutException | ExecutionException | IOException e) {
-                e.printStackTrace();
+                logger.log(Level.ERROR, e.getMessage());
             }
         }
 
         try {
             printMiddlewareStatistics(logPath, useSTDOUT);
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.log(Level.ERROR, e.getMessage());
         }
     }
 
