@@ -60,7 +60,7 @@ function subexperiment_22()
                 if [[ "${is_read}" == true ]]; then
                     LOOP_EXPERIMENT_VARS="repetition=${rep_count} vc=${vc_count} type=GET set_ratio=0 get_ratio=1"
                 else
-                    LOOP_EXPERIMENT_VARS="repetition=${rep_count} vc=${vc_count} type=GET set_ratio=1 get_ratio=0"
+                    LOOP_EXPERIMENT_VARS="repetition=${rep_count} vc=${vc_count} type=SET set_ratio=1 get_ratio=0"
                 fi
 
                 printf "Current Time: " && date
