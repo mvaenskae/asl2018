@@ -11,6 +11,7 @@
           mode: pull
           src: "{{ log_dir }}"
           dest: ~/
+          compress: false
 
     - name: Deleting logs On Remote
       ignore_errors: yes
