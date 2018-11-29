@@ -2,12 +2,15 @@ package ch.ethz.asltest.Utilities;
 
 import ch.ethz.asltest.Utilities.Statistics.Containers.AverageAreaIntegerStatistics;
 import ch.ethz.asltest.Utilities.Packets.WorkUnit.WorkUnit;
+import ch.ethz.asltest.Utilities.Statistics.Containers.AverageIntegerStatistics;
 
 import java.util.concurrent.ArrayBlockingQueue;
 
 public final class WorkQueue {
     private final ArrayBlockingQueue<WorkUnit> workUnits;
     public final AverageAreaIntegerStatistics queueStatistics = new AverageAreaIntegerStatistics();
+    //public final AverageIntegerStatistics queueStatistics = new AverageIntegerStatistics();
+
 
     public WorkQueue(int size)
     {

@@ -9,7 +9,6 @@ public final class AverageAreaIntegerStatistics extends AverageIntegerStatistics
     public AverageAreaIntegerStatistics(boolean placeholder)
     {
         super(placeholder);
-
     }
 
     @Override
@@ -79,7 +78,7 @@ public final class AverageAreaIntegerStatistics extends AverageIntegerStatistics
             currWindow = 0;
         }
         if (useLastElement) {
-            windowAverages.put(currWindow, (double) lastElement);
+            windowAverages.put(currWindow, (double) 0.0);
         } else {
             windowAverages.put(currWindow, ((double) windowElement.getAccumulated()) / WINDOW_SIZE);
         }
