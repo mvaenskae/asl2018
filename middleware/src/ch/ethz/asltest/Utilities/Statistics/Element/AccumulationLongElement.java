@@ -58,6 +58,6 @@ public final class AccumulationLongElement extends StatisticsElement {
     @Override
     public String toString()
     {
-        return timestamp + " " + element;
+        return String.format("%d %d", timestamp, element);
     }
 }

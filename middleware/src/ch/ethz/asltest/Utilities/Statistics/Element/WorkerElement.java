@@ -141,7 +141,7 @@ public abstract class WorkerElement extends StatisticsElement {
 
         filename = Paths.get(basedirectoryPath.toString(), prefix+"histogram.txt");
         String temp = IntStream.range(0, histogram.length)
-                .mapToObj(bucket -> String.format("%f, %d%s", ((double) bucket) / 10, histogram[bucket], NEW_LINE)).collect(Collectors.joining());
+                .mapToObj(bucket -> String.format("%f %d%s", ((double) bucket) / 10, histogram[bucket], NEW_LINE)).collect(Collectors.joining());
         if (useSTDOUT) {
             System.out.println(temp);
         } else {
@@ -184,25 +184,26 @@ public abstract class WorkerElement extends StatisticsElement {
 
         StringBuilder csvBuilder = new StringBuilder();
         ArrayList<Double> line;
-        boolean header = false;
+        boolean header = true;
+        long timestamp = 0;
         for (Map.Entry<Double, ArrayList<Double>> doubleArrayListEntry : sortedList) {
             StringBuilder lineBuilder = new StringBuilder();
             line = doubleArrayListEntry.getValue();
             if (header) {
                 header = false;
-                lineBuilder.append("Window, QueryCount, QueueWaitingTime, MemcachedWaitingTime, TimeInMiddleware");
+                csvBuilder.append("Window, QueryCount[op/win], QueueWaitingTime[ns], MemcachedWaitingTime[ns], TimeInMiddleware[ns]");
                 if (line.size() > 5) {
-                    lineBuilder.append(", MissCounts");
+                    csvBuilder.append(", MissCounts[key/win]");
                     if (line.size() > 6) {
-                        lineBuilder.append(", KeyCount");
+                        csvBuilder.append(", AverageKeySize[key], KeyCount[key/win]");
                     }
                 }
-                lineBuilder.append(NEW_LINE);
+                csvBuilder.append(NEW_LINE);
             }
             csvBuilder.append(doubleArrayListEntry.getKey()).append(", ");
             lineBuilder.append(line.get(0));
             for (int j = 1; j < line.size(); ++j) {
-                lineBuilder.append(", ").append(line.get(j));
+                lineBuilder.append(", ").append(String.format("%f", line.get(j)));
             }
             csvBuilder.append(lineBuilder.toString()).append(NEW_LINE);
         }
@@ -230,10 +231,10 @@ public abstract class WorkerElement extends StatisticsElement {
         if (!Double.isFinite(perWindowOpCount)) {
             perWindowOpCount = 0.0;
         }
-        return "" + finalOpCount + " " + perWindowOpCount + NEW_LINE +
-                finalAverageWaitingTimeQueue + NEW_LINE +
-                finalAverageServiceTimeMemcached + NEW_LINE +
-                finalAverageRTT + NEW_LINE;
+        return String.format("%d %f%s%f%s%f%s%f%s", finalOpCount, perWindowOpCount, NEW_LINE,
+                finalAverageWaitingTimeQueue, NEW_LINE,
+                finalAverageServiceTimeMemcached, NEW_LINE,
+                finalAverageRTT, NEW_LINE);
     }
 
     public void printSummary(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException

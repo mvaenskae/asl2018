@@ -175,7 +175,7 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
     protected String getTotalsAsString()
     {
         StringBuilder keysPerServer = new StringBuilder();
-        finalAverageKeysPerServer.forEach((key, value) -> keysPerServer.append(value).append(" "));
+        finalAverageKeysPerServer.forEach((key, value) -> keysPerServer.append(String.format("%f ", value)));
         keysPerServer.deleteCharAt(keysPerServer.length()-1);
 
         double perWindowKeySizes = ((double) finalKeySizes) / numberOfOps.getWindowAverages().size();
@@ -183,6 +183,8 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
             perWindowKeySizes = 0.0;
         }
 
-        return super.getTotalsAsString() + finalKeySizes + " " + perWindowKeySizes + NEW_LINE + keysPerServer.toString() + NEW_LINE;
+        String perWindowKeys = String.format("%d %f", finalKeySizes, perWindowKeySizes);
+
+        return super.getTotalsAsString() + perWindowKeys + NEW_LINE + keysPerServer.toString() + NEW_LINE;
     }
 }

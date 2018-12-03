@@ -41,7 +41,7 @@ public abstract class WindowStatistics extends MiddlewareStatistics {
     {
         StringBuilder temp = new StringBuilder();
         getWindowAverages().forEach(item -> {
-            temp.append(item.getKey()).append(", ").append(item.getValue()).append("\n");
+            temp.append(item.getKey()).append(" ").append(String.format("%f\n", item.getValue()));
         });
         if (useSTDOUT) {
             System.out.println(temp.toString());

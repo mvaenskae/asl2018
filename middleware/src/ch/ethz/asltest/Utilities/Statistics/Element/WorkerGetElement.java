@@ -115,6 +115,8 @@ public class WorkerGetElement extends WorkerElement {
             perWindowMissRate = 0.0;
         }
 
-        return super.getTotalsAsString() + finalMemcachedMissRate + " " + perWindowMissRate + NEW_LINE;
+        String finalMissRate = String.format("%f %f%s", finalMemcachedMissRate, perWindowMissRate, NEW_LINE);
+
+        return super.getTotalsAsString() + finalMissRate;
     }
 }
