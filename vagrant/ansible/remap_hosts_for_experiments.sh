@@ -21,6 +21,9 @@ host_ip_mapping[192.168.122.108]=10.0.0.8
 ansible_user[vagrant]=mvaenskae
 
 for c in "${!host_ip_mapping[@]}"; do
+    if [[ "$c" == "192.168.122.101" ]]; then
+        sed -i 's/'"$c"'/'"${host_ip_mapping[$c]}"'/g' playbooks/client/populate_memcaches.yml
+    fi
     echo "Changing IP from $c to ${host_ip_mapping[$c]} in inventory."
     for i in inventory/*.ini; do
         sed -i 's/'"$c"'/'"${host_ip_mapping[$c]}"'/g' $i
@@ -35,4 +38,3 @@ for i in inventory/*.ini; do
     sed -i 's/'"vagrant"'/'"${ansible_user[vagrant]}"'/g' $i
 done
 sed -i 's/'"vagrant"'/'"${ansible_user[vagrant]}"'/g' hosts.ini
-
