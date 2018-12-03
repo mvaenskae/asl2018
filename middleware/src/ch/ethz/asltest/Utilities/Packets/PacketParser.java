@@ -1,5 +1,6 @@
 package ch.ethz.asltest.Utilities.Packets;
 
+import ch.ethz.asltest.Utilities.Misc.StackTraceString;
 import ch.ethz.asltest.Utilities.Misc.Tuple;
 import ch.ethz.asltest.Utilities.Packets.WorkUnit.*;
 import org.apache.logging.log4j.Level;
@@ -62,6 +63,7 @@ public final class PacketParser {
      * Private helper objects
      */
     private final Logger logger;
+    private final StackTraceString stackTraceString = new StackTraceString();
     private SocketChannel client;
 
     public PacketParser(String loggerName)
@@ -84,7 +86,7 @@ public final class PacketParser {
             } catch (IOException e) {
                 this.logger.log(Level.ERROR, "Unexpected problems with this channel, flushing ByteBuffer.");
                 this.buffer.clear();
-                this.logger.log(Level.ERROR, e.getMessage());
+                this.logger.log(Level.ERROR, this.stackTraceString.toString(e));
                 break;
             }
 
@@ -164,12 +166,6 @@ public final class PacketParser {
                 cleanTemporaryState();
             }
         }
-
-//        if (!this.buffer.hasRemaining() || (headerFound && headerParsed && !this.hasBody)) {
-//            this.buffer.compact();
-//            this.bufferOffset = 0;
-//            this.headerOffset = 0;
-//        }
 
         this.logger.log(Level.DEBUG, "Exhausted received data.");
         return result;

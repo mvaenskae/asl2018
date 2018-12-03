@@ -1,5 +1,6 @@
 package ch.ethz.asltest;
 
+import ch.ethz.asltest.Utilities.Misc.StackTraceString;
 import ch.ethz.asltest.Utilities.Misc.Tuple;
 import ch.ethz.asltest.Utilities.Packets.PacketParser;
 import ch.ethz.asltest.Utilities.Statistics.Containers.WorkerStatistics;
@@ -40,6 +41,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
     private final Map<String, PacketParser> packetParsers = new HashMap<>(memcachedServers.size());
     // map keeping track of usage per server
     private final Map<SelectionKey, Long> fairnessMap = new HashMap<>(memcachedServers.size());
+    private StackTraceString stackTraceString = new StackTraceString();
 
     // Instance-local fields, initialized at run-time
     private WorkUnit workItem; // reference to local request to be handled
@@ -105,7 +107,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
             this.initWorkTask();
         } catch (Exception e) {
             logger.log(Level.FATAL, "MAIN: Couldn't initialize worker. Will stop execution on it...");
-            logger.log(Level.ERROR, e.getMessage());
+            logger.log(Level.ERROR, this.stackTraceString.toString(e));
             return null;
         }
 
@@ -158,7 +160,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
                 }
                 this.workerStats.multiGetElement.recordServerLoad(serverLoad);
             } catch (IOException e) {
-                e.printStackTrace();
+                this.logger.log(Level.ERROR, this.stackTraceString.toString(e));
             }
 
             for (SelectionKey sKey : this.memcachedSelector.keys()) {
@@ -635,7 +637,7 @@ public final class MemcachedHandler implements Callable<WorkerStatistics> {
             key.attach(this.packetParsers.get(((SocketChannel) key.channel()).getRemoteAddress().toString()));
         } catch (IOException e) {
             this.logger.log(Level.ERROR, "Couldn't reattach channel's PacketParser.");
-            e.printStackTrace();
+            this.logger.log(Level.ERROR, this.stackTraceString.toString(e));
         }
     }
 

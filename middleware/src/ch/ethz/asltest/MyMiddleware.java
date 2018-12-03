@@ -1,6 +1,7 @@
 package ch.ethz.asltest;
 
 import ch.ethz.asltest.Utilities.Misc.IPPair;
+import ch.ethz.asltest.Utilities.Misc.StackTraceString;
 import ch.ethz.asltest.Utilities.Statistics.Containers.AverageIntegerStatistics;
 import ch.ethz.asltest.Utilities.Statistics.MiddlewareStatistics;
 import ch.ethz.asltest.Utilities.Packets.PacketParser;
@@ -35,11 +36,12 @@ public final class MyMiddleware implements Runnable {
     // Constants defining default program behavior
     private final static int CLIENT_QUEUE_SIZE = 256;
     private final static int MAXIMUM_THREADS = 128;
-    final static String logDir = "mw-stats";
+    private final static String logDir = "mw-stats";
     private final boolean useSTDOUT = false;
 
     // Instance-bound default objects
     private static final Logger logger = LogManager.getLogger(MyMiddleware.class);
+    private StackTraceString stackTraceString = new StackTraceString();
 
     // Instance-bound fields which define the logic of the middleware
     public final AtomicBoolean atomicStopFlag = new AtomicBoolean(false);
@@ -75,8 +77,8 @@ public final class MyMiddleware implements Runnable {
         try {
             this.ip = InetAddress.getByName(ip);
         } catch (UnknownHostException e) {
-            logger.error("Middleware IP Address malformatted. Stopping now.");
-            e.printStackTrace();
+            logger.log(Level.ERROR, "Middleware IP Address malformatted. Stopping now.");
+            logger.log(Level.ERROR, this.stackTraceString.toString(e));
             throw e;
         }
 
@@ -101,8 +103,8 @@ public final class MyMiddleware implements Runnable {
         try {
             initNioMiddleware();
         } catch (IOException e) {
-            logger.error("Initialization of middleware failed. Stopping now.");
-            e.printStackTrace();
+            logger.log(Level.ERROR,"Initialization of middleware failed. Stopping now.");
+            logger.log(Level.ERROR, this.stackTraceString.toString(e));
             System.exit(-3);
         }
 
@@ -142,7 +144,7 @@ public final class MyMiddleware implements Runnable {
                     }
                 }
             } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
+                MyMiddleware.logger.log(Level.ERROR, this.stackTraceString.toString(e));
             }
         }
 
@@ -150,7 +152,7 @@ public final class MyMiddleware implements Runnable {
         try {
             this.serverChannel.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            MyMiddleware.logger.log(Level.ERROR, this.stackTraceString.toString(e));
         }
 
         // Wait until the queue is empty
@@ -178,12 +180,12 @@ public final class MyMiddleware implements Runnable {
             this.queueStatistics.stopStatistics();
         }
 
-        Path logPath = Paths.get(System.getProperty("user.home"), this.logDir);
+        Path logPath = Paths.get(System.getProperty("user.home"), MyMiddleware.logDir);
         if (!Files.exists(logPath, LinkOption.NOFOLLOW_LINKS)) {
             try {
                 Files.createDirectory(logPath);
             } catch (IOException e) {
-                logger.log(Level.ERROR, e.getMessage());
+                logger.log(Level.ERROR, this.stackTraceString.toString(e));
             }
         }
 
@@ -202,20 +204,20 @@ public final class MyMiddleware implements Runnable {
                     try {
                         Files.createDirectory(workerPath);
                     } catch (IOException e) {
-                        logger.log(Level.ERROR, e.getMessage());
+                        logger.log(Level.ERROR, this.stackTraceString.toString(e));
                     }
                 }
                 workerResult.printAverageStatistics(workerPath, useSTDOUT);
                 this.mergedWorkerStatistics.addOtherWeighted(workerResult, numThreadPoolThreads);
             } catch (InterruptedException | TimeoutException | ExecutionException | IOException e) {
-                logger.log(Level.ERROR, e.getMessage());
+                logger.log(Level.ERROR, this.stackTraceString.toString(e));
             }
         }
 
         try {
             printMiddlewareStatistics(logPath, useSTDOUT);
         } catch (IOException e) {
-            logger.log(Level.ERROR, e.getMessage());
+            logger.log(Level.ERROR, this.stackTraceString.toString(e));
         }
     }
 
@@ -230,7 +232,7 @@ public final class MyMiddleware implements Runnable {
     private static void register(Selector selector, ServerSocketChannel serverSocket) throws IOException
     {
         SocketChannel client = serverSocket.accept();
-        MyMiddleware.logger.log(Level.DEBUG, "Connection established from {}", client.getRemoteAddress().toString());
+        MyMiddleware.logger.log(Level.WARN, "Connection established from {}", client.getRemoteAddress().toString());
         client.configureBlocking(false);
         client.setOption(TCP_NODELAY, true);
         client.register(selector, SelectionKey.OP_READ, new PacketParser(client.getRemoteAddress().toString()));
@@ -244,9 +246,9 @@ public final class MyMiddleware implements Runnable {
         this.selector = Selector.open();
         this.serverChannel = ServerSocketChannel.open();
         try {
-            this.serverChannel.bind(new InetSocketAddress(this.ip, this.port));
+            this.serverChannel.bind(new InetSocketAddress(this.ip, this.port), 3*MAXIMUM_THREADS);
         } catch (IOException e) {
-            logger.error("Socket could not be opened, middleware not initialized!");
+            logger.log(Level.ERROR,"Socket could not be opened, middleware not initialized!");
             throw e;
         }
         this.serverChannel.configureBlocking(false);
@@ -262,10 +264,8 @@ public final class MyMiddleware implements Runnable {
 
         this.workerThreads = Executors.newFixedThreadPool(this.numThreadPoolThreads);
         this.workerResults = new ArrayList<>(this.numThreadPoolThreads);
-        //ArrayList<MemcachedHandler> workerList = new ArrayList<>(this.numThreadPoolThreads);
         for (int i = 0; i < this.numThreadPoolThreads; i++) {
             MemcachedHandler temp = new MemcachedHandler(i);
-            //workerList.add(temp);
             this.workerResults.add(this.workerThreads.submit(temp));
         }
     }
