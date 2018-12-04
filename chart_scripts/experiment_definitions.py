@@ -38,8 +38,8 @@ class ExperimentDefinitions:
                 'memtier_clients': [1, 2, 4, 8, 16, 32],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1'],
                 'request_types': ['GET', 'SET'],
-                'memcached_servers': ['Middleware1'],
-                'memtier_targets': ['Server1']}
+                'memcached_servers': ['Server1'],
+                'memtier_targets': ['Middleware1']}
 
     @staticmethod
     def subexpriment_32():
@@ -50,8 +50,8 @@ class ExperimentDefinitions:
                 'memtier_clients': [1, 2, 4, 8, 16, 32],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['GET', 'SET'],
-                'memcached_servers': ['Middleware1', 'Middleware2'],
-                'memtier_targets': ['Server1']}
+                'memcached_servers': ['Server1'],
+                'memtier_targets': ['Middleware1', 'Middleware2']}
 
     @staticmethod
     def subexpriment_40():
@@ -62,32 +62,32 @@ class ExperimentDefinitions:
                 'memtier_clients': [1, 2, 4, 8, 16, 32],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['SET'],
-                'memcached_servers': ['Middleware1', 'Middleware2'],
-                'memtier_targets': ['Server1', 'Server2', 'Server3']}
+                'memcached_servers': ['Server1', 'Server2', 'Server3'],
+                'memtier_targets': ['Middleware1', 'Middleware2']}
 
     @staticmethod
     def subexpriment_51():
         return {'experiment_id': 5,
                 'subexperiment_id': 1,
-                'worker_threads': [16],
+                'worker_threads': [64],
                 'memtier_threads': [1],
                 'memtier_clients': [2],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['SHARDED_1', 'SHARDED_3', 'SHARDED_6', 'SHARDED_9'],
-                'memcached_servers': ['Middleware1', 'Middleware2'],
-                'memtier_targets': ['Server1', 'Server2', 'Server3']}
+                'memcached_servers': ['Server1', 'Server2', 'Server3'],
+                'memtier_targets': ['Middleware1', 'Middleware2']}
 
     @staticmethod
     def subexpriment_52():
         return {'experiment_id': 5,
                 'subexperiment_id': 2,
-                'worker_threads': [16],
+                'worker_threads': [64],
                 'memtier_threads': [1],
                 'memtier_clients': [2],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['MULTIGET_1', 'MULTIGET_3', 'MULTIGET_6', 'MULTIGET_9'],
-                'memcached_servers': ['Middleware1', 'Middleware2'],
-                'memtier_targets': ['Server1', 'Server2', 'Server3']}
+                'memcached_servers': ['Server1', 'Server2', 'Server3'],
+                'memtier_targets': ['Middleware1', 'Middleware2']}
 
     @staticmethod
     def subexpriment_60_1_1():
@@ -98,8 +98,8 @@ class ExperimentDefinitions:
                 'memtier_clients': [32],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1'],
                 'request_types': ['GET', 'SET'],
-                'memcached_servers': ['Middleware1'],
-                'memtier_targets': ['Server1']}
+                'memcached_servers': ['Server1'],
+                'memtier_targets': ['Middleware1']}
 
     @staticmethod
     def subexpriment_60_1_3():
@@ -110,8 +110,8 @@ class ExperimentDefinitions:
                 'memtier_clients': [32],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1'],
                 'request_types': ['GET', 'SET'],
-                'memcached_servers': ['Middleware1'],
-                'memtier_targets': ['Server1', 'Server2', 'Server3']}
+                'memcached_servers': ['Server1', 'Server2', 'Server3'],
+                'memtier_targets': ['Middleware1']}
 
     @staticmethod
     def subexpriment_60_2_1():
@@ -122,8 +122,8 @@ class ExperimentDefinitions:
                 'memtier_clients': [32],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['GET', 'SET'],
-                'memcached_servers': ['Middleware1', 'Middleware2'],
-                'memtier_targets': ['Server1']}
+                'memcached_servers': ['Server1'],
+                'memtier_targets': ['Middleware1', 'Middleware2']}
 
     @staticmethod
     def subexpriment_60_2_3():
@@ -134,8 +134,8 @@ class ExperimentDefinitions:
                 'memtier_clients': [32],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['GET', 'SET'],
-                'memcached_servers': ['Middleware1', 'Middleware2'],
-                'memtier_targets': ['Server1', 'Server2', 'Server3']}
+                'memcached_servers': ['Server1', 'Server2', 'Server3'],
+                'memtier_targets': ['Middleware1', 'Middleware2']}
 
     @staticmethod
     def all_experiments():

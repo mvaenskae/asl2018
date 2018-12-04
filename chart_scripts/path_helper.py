@@ -5,7 +5,7 @@ USE PATH.ITERDIR FOR GETTING THE RESPECTIVE FILES PER DIR!
 """
 
 class PathHelper:
-    home = pathlib.Path.home().joinpath("asl-logs-mickeyv")
+    home = pathlib.Path.home().joinpath("azure", "asl-logs-mickeyv")
     repetitions = [1, 2, 3]
 
     def __init__(self, experiment_dictionary):
@@ -33,7 +33,7 @@ class PathHelper:
                         for host in self.hostnames:
                             for type in self.request_types:
                                 path = PathHelper.home.joinpath(str(self.experiment_id), str(self.subexpertiment_id),
-                                                                f'{wt:02}', str(ct), str(vc), str(rep), str(host),
+                                                                f'{wt:02}', str(ct), f'{vc:02}', str(rep), str(host),
                                                                 str(type), str(len(self.memcached_servers)))
                                 self.generated_paths.append(path)
 
@@ -46,7 +46,7 @@ class PathHelper:
                         for type in self.request_types:
                             for rep in PathHelper.repetitions:
                                 path = PathHelper.home.joinpath(str(self.experiment_id), str(self.subexpertiment_id),
-                                                                f'{wt:02}', str(ct), str(vc), str(rep), str(host),
+                                                                f'{wt:02}', str(ct), f'{vc:02}', str(rep), str(host),
                                                                 str(type), str(len(self.memcached_servers)))
                                 result.append(path)
         return result
@@ -60,7 +60,7 @@ class PathHelper:
                         for vc in self.memtier_clients:
                             for rep in PathHelper.repetitions:
                                 path = PathHelper.home.joinpath(str(self.experiment_id), str(self.subexpertiment_id),
-                                                                f'{wt:02}', str(ct), str(vc), str(rep), str(host),
+                                                                f'{wt:02}', str(ct), f'{vc:02}', str(rep), str(host),
                                                                 str(type), str(len(self.memcached_servers)))
                                 result.append(path)
         return result
@@ -74,7 +74,7 @@ class PathHelper:
                         for vc in self.memtier_clients:
                             for rep in PathHelper.repetitions:
                                 path = PathHelper.home.joinpath(str(self.experiment_id), str(self.subexpertiment_id),
-                                                                f'{wt:02}', str(ct), str(vc), str(rep), str(host),
+                                                                f'{wt:02}', str(ct), f'{vc:02}', str(rep), str(host),
                                                                 str(type), str(len(self.memcached_servers)))
                                 result.append(path)
         return result
@@ -96,4 +96,16 @@ class PathHelper:
         :param path: Path to interpret
         :return: Dictionary of path interpretation
         """
+        exp_id = path.parts[-9]
+        subexp_id = path.parts[-8]
+        wt_count = path.parts[-7]
+        ct_count = path.parts[-6]
+        vc_count = path.parts[-5]
+        rep_count = path.parts[-4]
+        hostname = path.parts[-3]
+        type = path.parts[-2]
+        memcached_server_count = path.parts[-1]
 
+        return {'exp_id': exp_id, 'subexp_id': subexp_id,
+                'wt': wt_count, 'ct': ct_count, 'vc': vc_count, 'rep': rep_count,
+                'hostname': hostname, 'type': type, 'memcached_server_count': memcached_server_count}
