@@ -3,7 +3,7 @@ class ExperimentDefinitions:
     Helper class which holds constant definitions for the experimental parameters for each experiment
     """
 
-    log_base="asl-logs-mickeyv"
+    log_base = "asl-logs-mickeyv"
 
     @staticmethod
     def subexpriment_21():
