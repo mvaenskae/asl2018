@@ -44,12 +44,12 @@ public final class WorkerStatistics extends MiddlewareStatistics {
         this.invalidPacketCounter.addElement(timestamp, 1L);
     }
 
-    public void addOtherWeighted(WorkerStatistics other, int normalizer)
+    public void addOther(WorkerStatistics other)
     {
         invalidPacketCounter.addOther(other.invalidPacketCounter);
-        setElement.addOtherWeighted(other.setElement, normalizer);
-        getElement.addOtherWeighted(other.getElement, normalizer);
-        multiGetElement.addOtherWeighted(other.multiGetElement, normalizer);
+        setElement.merge(other.setElement);
+        getElement.merge(other.getElement);
+        multiGetElement.merge(other.multiGetElement);
     }
 
     public void stopStatistics()
@@ -77,17 +77,5 @@ public final class WorkerStatistics extends MiddlewareStatistics {
         multiGetElement.printWindowStatistics(basedirectoryPath, "multiget_", useSTDOUT);
         multiGetElement.printCsv(basedirectoryPath, "multiget_", useSTDOUT);
         multiGetElement.printSummary(basedirectoryPath, "multiget_", useSTDOUT);
-
-        WorkerGetElement mergedElement = new WorkerGetElement(true);
-        WorkerMultiGetElement totalElement = new WorkerMultiGetElement(true);
-
-        mergedElement.merge(setElement);
-        mergedElement.merge(getElement);
-        totalElement.merge(multiGetElement);
-        totalElement.merge(mergedElement);
-
-        totalElement.printWindowStatistics(basedirectoryPath, prefix, useSTDOUT);
-        totalElement.printCsv(basedirectoryPath, prefix, useSTDOUT);
-        totalElement.printSummary(basedirectoryPath, prefix, useSTDOUT);
     }
 }

@@ -208,7 +208,7 @@ public final class MyMiddleware implements Runnable {
                     }
                 }
                 workerResult.printAverageStatistics(workerPath, useSTDOUT);
-                this.mergedWorkerStatistics.addOtherWeighted(workerResult, numThreadPoolThreads);
+                this.mergedWorkerStatistics.addOther(workerResult);
             } catch (InterruptedException | TimeoutException | ExecutionException | IOException e) {
                 logger.log(Level.ERROR, this.stackTraceString.toString(e));
             }
@@ -246,7 +246,11 @@ public final class MyMiddleware implements Runnable {
         this.selector = Selector.open();
         this.serverChannel = ServerSocketChannel.open();
         try {
-            this.serverChannel.bind(new InetSocketAddress(this.ip, this.port), 3*MAXIMUM_THREADS);
+            Scanner tcp_config_reader = new Scanner(Paths.get("/proc/sys/net/ipv4/tcp_max_syn_backlog"));
+            int tcp_backlog = tcp_config_reader.nextInt();
+            tcp_config_reader.close();
+            tcp_backlog = tcp_backlog < 256 ? 512 : tcp_backlog;
+            this.serverChannel.bind(new InetSocketAddress(this.ip, this.port), tcp_backlog);
         } catch (IOException e) {
             logger.log(Level.ERROR,"Socket could not be opened, middleware not initialized!");
             throw e;

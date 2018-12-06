@@ -1,6 +1,6 @@
 package ch.ethz.asltest.Utilities.Statistics.Element;
 
-import ch.ethz.asltest.Utilities.Statistics.Containers.AccumulationStatistics;
+import ch.ethz.asltest.Utilities.Statistics.Containers.AverageIntegerStatistics;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -12,22 +12,22 @@ import java.util.Map;
 public final class WorkerMultiGetElement extends WorkerGetElement {
 
     // Keep track of the following averages:
-    private final AccumulationStatistics keySizeCounter;
+    private final AverageIntegerStatistics keySizeCounter;
     private final HashMap<String, Long> requestsPerServer = new HashMap<>();
 
     // Final variables only to be computed for the summary of this element.
-    private long finalKeySizes;
+    private double finalKeySizes;
     private final HashMap<String, Double> finalAverageKeysPerServer = new HashMap<>();
 
     public WorkerMultiGetElement() {
         super();
-        keySizeCounter = new AccumulationStatistics();
+        keySizeCounter = new AverageIntegerStatistics();
     }
 
     public WorkerMultiGetElement(boolean placeholder)
     {
         super(placeholder);
-        keySizeCounter = new AccumulationStatistics(placeholder);
+        keySizeCounter = new AverageIntegerStatistics(placeholder);
     }
 
     public void recordServerLoad(HashMap<String, Long> distributedGets)
@@ -40,25 +40,10 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
         keySizeCounter.addElement(timestamp, keySize);
     }
 
-    @Override
-    public void merge(WorkerElement other)
-    {
-        super.merge(other);
-        this.keySizeCounter.addOther(other.numberOfOps);
-    }
-
     public void merge(WorkerMultiGetElement other)
     {
         super.merge(other);
-        this.keySizeCounter.addOther(other.keySizeCounter);
-        other.requestsPerServer.forEach((key, value) -> this.requestsPerServer.merge(key, value, Long::sum));
-
-    }
-
-    public void addOtherWeighted(WorkerMultiGetElement other, int weighting)
-    {
-        super.addOtherWeighted(other, weighting);
-        this.keySizeCounter.addOther(other.keySizeCounter);
+        this.keySizeCounter.averageWithOther(other.keySizeCounter, this.totalOpsEncountered, other.totalOpsEncountered);
         other.requestsPerServer.forEach((key, value) -> this.requestsPerServer.merge(key, value, Long::sum));
     }
 
@@ -123,6 +108,10 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
                 csvLayout.get(entry).add(value)
         );
 
+        keySizeCounter.getWindowAverages().forEach(entry ->
+                csvLayout.get(entry.getKey()).add(entry.getValue())
+        );
+
         // Then add the average key size per window!
         HashMap<Double, Double> averageKeySize = new HashMap<>();
         keySizeCounter.getWindowAverages().forEach(entry ->
@@ -130,19 +119,12 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
         );
 
         numberOfOps.getWindowAverages().forEach(entry -> {
-            double keySize = averageKeySize.get(entry.getKey()) / entry.getValue();
-            if (!Double.isFinite(keySize)) {
-                keySize = 0.0;
-            }
-            averageKeySize.put(entry.getKey(), keySize);
+            double keysRequested = averageKeySize.get(entry.getKey()) * entry.getValue();
+            averageKeySize.put(entry.getKey(), keysRequested);
         });
 
         averageKeySize.forEach((entry, value) ->
                 csvLayout.get(entry).add(value)
-        );
-
-        keySizeCounter.getWindowAverages().forEach(entry ->
-                csvLayout.get(entry.getKey()).add(entry.getValue())
         );
 
         return csvLayout;
@@ -154,7 +136,7 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
         finalAverageWaitingTimeQueue = averageWaitingTimeQueue.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
         finalAverageServiceTimeMemcached = averageServiceTimeMemcached.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
         finalAverageRTT = averageRTT.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
-        finalKeySizes = keySizeCounter.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).sum();
+        finalKeySizes = keySizeCounter.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).summaryStatistics().getAverage();
         requestsPerServer.forEach((key, value) -> {
             double temp = ((double) value) / finalOpCount;
             if (!Double.isFinite(temp)) {
@@ -183,7 +165,7 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
             perWindowKeySizes = 0.0;
         }
 
-        String perWindowKeys = String.format("%d %f", finalKeySizes, perWindowKeySizes);
+        String perWindowKeys = String.format("%f %f", finalKeySizes, perWindowKeySizes);
 
         return super.getTotalsAsString() + perWindowKeys + NEW_LINE + keysPerServer.toString() + NEW_LINE;
     }

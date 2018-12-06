@@ -25,6 +25,8 @@ public abstract class WorkerElement extends StatisticsElement {
     protected final AverageIntegerStatistics averageServiceTimeMemcached;
     protected final AverageIntegerStatistics averageRTT;
 
+    protected double totalOpsEncountered;
+
     // Final variables only to be computed for the summary of this element.
     long finalOpCount;
     double finalAverageWaitingTimeQueue;
@@ -75,29 +77,18 @@ public abstract class WorkerElement extends StatisticsElement {
         putIntoHistogram(nanosRTT);
     }
 
-    public void incrementOpCounter(long timestamp)
+    public final void incrementOpCounter(long timestamp)
     {
         numberOfOps.addElement(timestamp, 1L);
+        this.totalOpsEncountered += 1L;
     }
 
     public void merge(WorkerElement other)
     {
         this.numberOfOps.addOther(other.numberOfOps);
-        this.averageWaitingTimeQueue.addOther(other.averageWaitingTimeQueue);
-        this.averageServiceTimeMemcached.addOther(other.averageServiceTimeMemcached);
-        this.averageRTT.addOther(other.averageRTT);
-
-        for (int i = 0; i < histogram.length; ++i) {
-            histogram[i] += other.histogram[i];
-        }
-    }
-
-    public void addOtherWeighted(WorkerElement other, int weighting)
-    {
-        this.numberOfOps.addOther(other.numberOfOps);
-        this.averageWaitingTimeQueue.addOtherWeighted(other.averageWaitingTimeQueue, weighting);
-        this.averageServiceTimeMemcached.addOtherWeighted(other.averageServiceTimeMemcached, weighting);
-        this.averageRTT.addOtherWeighted(other.averageRTT, weighting);
+        this.averageWaitingTimeQueue.averageWithOther(other.averageWaitingTimeQueue, this.totalOpsEncountered, other.totalOpsEncountered);
+        this.averageServiceTimeMemcached.averageWithOther(other.averageServiceTimeMemcached, this.totalOpsEncountered, other.totalOpsEncountered);
+        this.averageRTT.averageWithOther(other.averageRTT, this.totalOpsEncountered, other.totalOpsEncountered);
 
         for (int i = 0; i < histogram.length; ++i) {
             histogram[i] += other.histogram[i];
@@ -110,12 +101,6 @@ public abstract class WorkerElement extends StatisticsElement {
         averageWaitingTimeQueue.stopStatistics();
         averageServiceTimeMemcached.stopStatistics();
         averageRTT.stopStatistics();
-    }
-
-    @Override
-    public String toString()
-    {
-        return super.toString();
     }
 
     protected void putIntoHistogram(long inNanos)
@@ -185,7 +170,6 @@ public abstract class WorkerElement extends StatisticsElement {
         StringBuilder csvBuilder = new StringBuilder();
         ArrayList<Double> line;
         boolean header = true;
-        long timestamp = 0;
         for (Map.Entry<Double, ArrayList<Double>> doubleArrayListEntry : sortedList) {
             StringBuilder lineBuilder = new StringBuilder();
             line = doubleArrayListEntry.getValue();
@@ -221,6 +205,8 @@ public abstract class WorkerElement extends StatisticsElement {
     {
         finalOpCount = numberOfOps.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).sum();
         finalAverageWaitingTimeQueue = averageWaitingTimeQueue.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
+        DoubleSummaryStatistics temp = averageWaitingTimeQueue.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics();
+        temp.getAverage();
         finalAverageServiceTimeMemcached = averageServiceTimeMemcached.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
         finalAverageRTT = averageRTT.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
     }

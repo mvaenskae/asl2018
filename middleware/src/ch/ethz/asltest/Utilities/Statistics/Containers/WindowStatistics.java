@@ -57,8 +57,9 @@ public abstract class WindowStatistics extends MiddlewareStatistics {
         other.windowAverages.forEach((key, value) -> this.windowAverages.merge(key, value, (v1, v2) -> v1 + v2));
     }
 
-    public final void addOtherWeighted(WindowStatistics other, int weighting)
+    public final void averageWithOther(WindowStatistics other, double w_self, double w_other)
     {
-        other.windowAverages.forEach((key, value) -> this.windowAverages.merge(key, value, (v1, v2) -> v1 + (v2 / weighting)));
+        other.windowAverages.forEach((key, value) ->
+                this.windowAverages.merge(key, value, (v1, v2) -> ((v1 * w_self) + (v2 * w_other)) / (w_self + w_other)));
     }
 }

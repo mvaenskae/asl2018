@@ -3,12 +3,10 @@ package ch.ethz.asltest.Utilities.Statistics.Element;
 import ch.ethz.asltest.Utilities.Statistics.Containers.CounterStatistics;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 
 public class WorkerGetElement extends WorkerElement {
 
@@ -34,20 +32,9 @@ public class WorkerGetElement extends WorkerElement {
         this.memcachedMisses.addElement(timestamp, missCount);
     }
 
-    public void incrementOpCounter(long timestamp)
-    {
-        numberOfOps.addElement(timestamp, 1L);
-    }
-
     public void merge(WorkerGetElement other)
     {
         super.merge(other);
-        this.memcachedMisses.addOther(other.memcachedMisses);
-    }
-
-    public void addOtherWeighted(WorkerGetElement other, int weighting)
-    {
-        super.addOtherWeighted(other, weighting);
         this.memcachedMisses.addOther(other.memcachedMisses);
     }
 
@@ -55,12 +42,6 @@ public class WorkerGetElement extends WorkerElement {
     {
         super.disableStatistics();
         memcachedMisses.stopStatistics();
-    }
-
-    @Override
-    public String toString()
-    {
-        return super.toString();
     }
 
     public void printWindowStatistics(Path basedirectoryPath, String prefix, boolean useSTDOUT) throws IOException
@@ -110,7 +91,7 @@ public class WorkerGetElement extends WorkerElement {
 
     protected String getTotalsAsString()
     {
-        double perWindowMissRate = ((double) finalMemcachedMissRate) / memcachedMisses.getWindowAverages().size();
+        double perWindowMissRate = finalMemcachedMissRate / memcachedMisses.getWindowAverages().size();
         if (!Double.isFinite(perWindowMissRate)) {
             perWindowMissRate = 0.0;
         }
