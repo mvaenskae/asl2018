@@ -22,7 +22,7 @@ function subexperiment_21()
         str2="$str1 0 MW threads,"
         for rep_count in 1 2 3; do
             str3="$str2 rep ${rep_count}/3,"
-            for vc_count in 01 02 04 08 16 32; do
+            for vc_count in 01 02 04 08 16 32 44 56 64; do
 
                 echo "$str3 for ${vc_count} MT clients"
                 if [[ "${is_read}" == true ]]; then
@@ -54,7 +54,7 @@ function subexperiment_22()
         str2="$str1 using 0 middleware threads"
         for rep_count in 1 2 3; do
             str3="$str2 repetition ${rep_count}/3"
-            for vc_count in 01 02 04 08 16 32; do
+            for vc_count in 01 02 04 08 16 32 44 56 64; do
 
                 echo "$str3 for ${vc_count} clients"
                 if [[ "${is_read}" == true ]]; then
@@ -87,7 +87,7 @@ function subexperiment_31()
             str2="$str1 using ${thread_count} middleware threads"
             for rep_count in 1 2 3; do
                 str3="$str2 repetition ${rep_count}/3"
-                for vc_count in 01 02 04 08 16 32; do
+                for vc_count in 01 02 04 08 16 32 44 56 64; do
 
                     echo "$str3 for ${vc_count} clients"
                     if [[ "${is_read}" == true ]]; then
@@ -123,7 +123,7 @@ function subexperiment_32()
             str2="$str1 using ${thread_count} middleware threads"
             for rep_count in 1 2 3; do
                 str3="$str2 repetition ${rep_count}/3"
-                for vc_count in 01 02 04 08 16 32; do
+                for vc_count in 01 02 04 08 16 32 44 56 64; do
 
                     echo "$str3 for ${vc_count} clients"
                     if [[ "${is_read}" == true ]]; then
@@ -154,7 +154,7 @@ function subexperiment_40()
         str2="$str1 using ${thread_count} middleware threads"
         for rep_count in 1 2 3; do
             str3="$str2 repetition ${rep_count}/3"
-            for vc_count in 01 02 04 08 16 32; do
+                for vc_count in 01 02 04 08 16 32 44 56 64; do
 
                 echo "$str3 for ${vc_count} clients"
                 LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} vc=${vc_count} type=SET set_ratio=1 get_ratio=0"
@@ -281,7 +281,7 @@ function experiment_2() # Baseline without Middleware Wrapper
     subexperiment_22
     printf "Current Time: " && date
 
-    ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    # ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
     printf "Current Time: " && date
 
     echo "Sleeping Some"
@@ -298,7 +298,7 @@ function experiment_3() # Baseline with Middleware Wrapper
     subexperiment_32
     printf "Current Time: " && date
 
-    ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    # ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
     printf "Current Time: " && date
 
     echo "Sleeping Some"
@@ -313,7 +313,7 @@ function experiment_4() # Throughput for Writes Wrapper
     subexperiment_40
     printf "Current Time: " && date
 
-    ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    # ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
     printf "Current Time: " && date
 
     echo "Sleeping Some"
@@ -330,7 +330,7 @@ function experiment_5() # Gets and Multi-gets Wrapper
     subexperiment_52
     printf "Current Time: " && date
 
-    ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    # ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
     printf "Current Time: " && date
 
     echo "Sleeping Some"
@@ -345,7 +345,7 @@ function experiment_6() # 2K Analysis Wrapper
     subexperiment_60
     printf "Current Time: " && date
 
-    ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
+    # ansible-playbook -i hosts.ini ./playbooks/basic_blocks/fetch-and-delete-logs.yml
     printf "Current Time: " && date
 }
 
@@ -381,6 +381,10 @@ function experiments_full() # Run experiments on already provisioned machines
     experiment_4
     experiment_5
     experiment_6
+    for i in 10.0.0.10 10.0.0.11 10.0.0.4 10.0.0.5 10.0.0.6 10.0.0.7 10.0.0.8 10.0.0.9; do
+        echo "Retrieving logs from $i..."
+        rsync -avAHX $i:~/asl-logs-mickeyv ./
+    done
     echo "Experiments Done!"
 }
 
