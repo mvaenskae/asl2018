@@ -40,6 +40,13 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
         keySizeCounter.addElement(timestamp, keySize);
     }
 
+    public void cacheMiss(long timestamp, long missCount)
+    {
+        for (int i = 0; i < missCount; ++i) {
+            this.memcachedMisses.addElement(timestamp, 1L);
+        }
+    }
+
     public void merge(WorkerMultiGetElement other)
     {
         super.merge(other);
@@ -69,48 +76,7 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
 
     public HashMap<Double, ArrayList<Double>> getCsv()
     {
-        HashMap<Double, ArrayList<Double>> csvLayout = new HashMap<>();
-
-        numberOfOps.getWindowAverages().forEach(entry ->
-        {
-            csvLayout.put(entry.getKey(), new ArrayList<>());
-            csvLayout.get(entry.getKey()).add(entry.getValue());
-        });
-
-        averageWaitingTimeQueue.getWindowAverages().forEach(entry ->
-                csvLayout.get(entry.getKey()).add(entry.getValue())
-        );
-
-        averageServiceTimeMemcached.getWindowAverages().forEach(entry ->
-                csvLayout.get(entry.getKey()).add(entry.getValue())
-        );
-
-        averageRTT.getWindowAverages().forEach(entry ->
-                csvLayout.get(entry.getKey()).add(entry.getValue())
-        );
-
-        // Here modify the missCount to match on the actual elements!
-        HashMap<Double, Double> missrate = new HashMap<>();
-        keySizeCounter.getWindowAverages().forEach(entry ->
-                missrate.put(entry.getKey(), entry.getValue())
-        );
-
-        memcachedMisses.getWindowAverages().forEach(entry ->
-        {
-            double missRate = entry.getValue() / missrate.get(entry.getKey());
-            if (!Double.isFinite(missRate)) {
-                missRate = 0.0;
-            }
-            missrate.put(entry.getKey(), missRate);
-        });
-
-        missrate.forEach((entry, value) ->
-                csvLayout.get(entry).add(value)
-        );
-
-        keySizeCounter.getWindowAverages().forEach(entry ->
-                csvLayout.get(entry.getKey()).add(entry.getValue())
-        );
+        HashMap<Double, ArrayList<Double>> csvLayout = super.getCsv();
 
         // Then add the average key size per window!
         HashMap<Double, Double> averageKeySize = new HashMap<>();
@@ -125,6 +91,10 @@ public final class WorkerMultiGetElement extends WorkerGetElement {
 
         averageKeySize.forEach((entry, value) ->
                 csvLayout.get(entry).add(value)
+        );
+
+        keySizeCounter.getWindowAverages().forEach(entry ->
+                csvLayout.get(entry.getKey()).add(entry.getValue())
         );
 
         return csvLayout;

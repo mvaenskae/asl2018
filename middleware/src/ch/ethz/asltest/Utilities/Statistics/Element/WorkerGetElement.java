@@ -29,7 +29,7 @@ public class WorkerGetElement extends WorkerElement {
 
     public void cacheMiss(long timestamp, long missCount)
     {
-        this.memcachedMisses.addElement(timestamp, missCount);
+        this.memcachedMisses.addElement(timestamp, 1L);
     }
 
     public void merge(WorkerGetElement other)
@@ -57,22 +57,8 @@ public class WorkerGetElement extends WorkerElement {
     {
         HashMap<Double, ArrayList<Double>> csvLayout = super.getCsv();
 
-        HashMap<Double, Double> missrate = new HashMap<>();
-        numberOfOps.getWindowAverages().forEach(entry ->
-                missrate.put(entry.getKey(), entry.getValue())
-        );
-
         memcachedMisses.getWindowAverages().forEach(entry ->
-        {
-            double missRate = entry.getValue() / missrate.get(entry.getKey());
-            if (Double.isNaN(missRate)) {
-                missRate = 0.0;
-            }
-            missrate.put(entry.getKey(), missRate);
-        });
-
-        missrate.forEach((entry, value) ->
-                csvLayout.get(entry).add(value)
+                csvLayout.get(entry.getKey()).add(entry.getValue())
         );
 
         return csvLayout;

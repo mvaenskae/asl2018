@@ -34,7 +34,7 @@ import static java.net.StandardSocketOptions.TCP_NODELAY;
 public final class MyMiddleware implements Runnable {
 
     // Constants defining default program behavior
-    private final static int CLIENT_QUEUE_SIZE = 256;
+    private final static int CLIENT_QUEUE_SIZE = 512;
     private final static int MAXIMUM_THREADS = 128;
     private final static String logDir = "mw-stats";
     private final boolean useSTDOUT = false;
@@ -246,10 +246,15 @@ public final class MyMiddleware implements Runnable {
         this.selector = Selector.open();
         this.serverChannel = ServerSocketChannel.open();
         try {
-            Scanner tcp_config_reader = new Scanner(Paths.get("/proc/sys/net/ipv4/tcp_max_syn_backlog"));
-            int tcp_backlog = tcp_config_reader.nextInt();
-            tcp_config_reader.close();
-            tcp_backlog = tcp_backlog < 256 ? 512 : tcp_backlog;
+            int tcp_backlog = 0;
+            try {
+                Scanner tcp_config_reader = new Scanner(Paths.get("/proc/sys/net/ipv4/tcp_max_syn_backlog"));
+                tcp_backlog = tcp_config_reader.nextInt();
+                tcp_config_reader.close();
+            } catch (NoSuchElementException | IOException e) {
+                logger.log(Level.WARN, "No Linux? Have fun :)");
+            }
+            tcp_backlog = tcp_backlog < 512 ? 512 : tcp_backlog;
             this.serverChannel.bind(new InetSocketAddress(this.ip, this.port), tcp_backlog);
         } catch (IOException e) {
             logger.log(Level.ERROR,"Socket could not be opened, middleware not initialized!");

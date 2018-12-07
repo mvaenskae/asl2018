@@ -86,6 +86,7 @@ public abstract class WorkerElement extends StatisticsElement {
     public void merge(WorkerElement other)
     {
         this.numberOfOps.addOther(other.numberOfOps);
+        this.totalOpsEncountered = this.numberOfOps.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).sum();
         this.averageWaitingTimeQueue.averageWithOther(other.averageWaitingTimeQueue, this.totalOpsEncountered, other.totalOpsEncountered);
         this.averageServiceTimeMemcached.averageWithOther(other.averageServiceTimeMemcached, this.totalOpsEncountered, other.totalOpsEncountered);
         this.averageRTT.averageWithOther(other.averageRTT, this.totalOpsEncountered, other.totalOpsEncountered);
@@ -176,10 +177,10 @@ public abstract class WorkerElement extends StatisticsElement {
             if (header) {
                 header = false;
                 csvBuilder.append("Window, QueryCount[op/win], QueueWaitingTime[ns], MemcachedWaitingTime[ns], TimeInMiddleware[ns]");
-                if (line.size() > 5) {
+                if (line.size() > 4) {
                     csvBuilder.append(", MissCounts[key/win]");
-                    if (line.size() > 6) {
-                        csvBuilder.append(", AverageKeySize[key], KeyCount[key/win]");
+                    if (line.size() > 5) {
+                        csvBuilder.append(", KeyCount[key/win], AverageKeySize[key]");
                     }
                 }
                 csvBuilder.append(NEW_LINE);
@@ -205,8 +206,6 @@ public abstract class WorkerElement extends StatisticsElement {
     {
         finalOpCount = numberOfOps.getWindowAverages().stream().mapToLong(value -> value.getValue().longValue()).sum();
         finalAverageWaitingTimeQueue = averageWaitingTimeQueue.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
-        DoubleSummaryStatistics temp = averageWaitingTimeQueue.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics();
-        temp.getAverage();
         finalAverageServiceTimeMemcached = averageServiceTimeMemcached.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
         finalAverageRTT = averageRTT.getWindowAverages().stream().mapToDouble(Map.Entry::getValue).summaryStatistics().getAverage();
     }
