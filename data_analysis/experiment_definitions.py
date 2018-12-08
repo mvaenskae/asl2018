@@ -1,9 +1,24 @@
+import pathlib
+
+
 class ExperimentDefinitions:
     """
     Helper class which holds constant definitions for the experimental parameters for each experiment
     """
 
-    log_base = "asl-logs-mickeyv"
+    log_base = pathlib.Path.home().joinpath("ASL_RESULTS")
+
+    @staticmethod
+    def subexpriment_00():
+        return {'experiment_id': 0,
+                'subexperiment_id': 0,
+                'worker_threads': [8, 16, 32, 64],
+                'memtier_threads': [1],
+                'memtier_clients': [16, 32, 40, 48, 56],
+                'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
+                'request_types': ['SET'],
+                'memcached_servers': ['Server1', 'Server2', 'Server3'],
+                'memtier_targets': ['Middleware1', 'Middleware2']}
 
     @staticmethod
     def subexpriment_21():
@@ -11,7 +26,7 @@ class ExperimentDefinitions:
                 'subexperiment_id': 1,
                 'worker_threads': [0],
                 'memtier_threads': [2],
-                'memtier_clients': [1, 2, 4, 8, 16, 32],
+                'memtier_clients': [1, 2, 4, 8, 16, 32, 44, 56, 64],
                 'hostnames': ['Client1', 'Client2', 'Client3'],
                 'request_types': ['GET', 'SET'],
                 'memcached_servers': ['Server1'],
@@ -23,7 +38,7 @@ class ExperimentDefinitions:
                 'subexperiment_id': 2,
                 'worker_threads': [0],
                 'memtier_threads': [1],
-                'memtier_clients': [1, 2, 4, 8, 16, 32],
+                'memtier_clients': [1, 2, 4, 8, 16, 32, 44, 56, 64],
                 'hostnames': ['Client1'],
                 'request_types': ['GET', 'SET'],
                 'memcached_servers': ['Server1', 'Server2'],
@@ -35,7 +50,7 @@ class ExperimentDefinitions:
                 'subexperiment_id': 1,
                 'worker_threads': [8, 16, 32, 64],
                 'memtier_threads': [2],
-                'memtier_clients': [1, 2, 4, 8, 16, 32],
+                'memtier_clients': [1, 2, 4, 8, 16, 32, 40, 48],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1'],
                 'request_types': ['GET', 'SET'],
                 'memcached_servers': ['Server1'],
@@ -47,7 +62,7 @@ class ExperimentDefinitions:
                 'subexperiment_id': 2,
                 'worker_threads': [8, 16, 32, 64],
                 'memtier_threads': [1],
-                'memtier_clients': [1, 2, 4, 8, 16, 32],
+                'memtier_clients': [1, 2, 4, 8, 16, 32, 40, 48],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['GET', 'SET'],
                 'memcached_servers': ['Server1'],
@@ -59,7 +74,7 @@ class ExperimentDefinitions:
                 'subexperiment_id': 0,
                 'worker_threads': [8, 16, 32, 64],
                 'memtier_threads': [1],
-                'memtier_clients': [1, 2, 4, 8, 16, 32],
+                'memtier_clients': [1, 2, 4, 8, 16, 32, 40, 48],
                 'hostnames': ['Client1', 'Client2', 'Client3', 'Middleware1', 'Middleware2'],
                 'request_types': ['SET'],
                 'memcached_servers': ['Server1', 'Server2', 'Server3'],
@@ -150,7 +165,6 @@ class ExperimentDefinitions:
 
         experiments = {'2': experiment2, '3': experiment3, '4': experiment4, '5': experiment5, '6': experiment6}
         return experiments
-
 
     @staticmethod
     def all_subexperiments():

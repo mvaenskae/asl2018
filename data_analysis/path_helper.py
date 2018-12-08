@@ -1,11 +1,10 @@
 import pathlib
 
-"""
-USE PATH.ITERDIR FOR GETTING THE RESPECTIVE FILES PER DIR!
-"""
+from experiment_definitions import ExperimentDefinitions
+
 
 class PathHelper:
-    home = pathlib.Path.home().joinpath("azure", "asl-logs-mickeyv")
+    home = ExperimentDefinitions.log_base
     repetitions = [1, 2, 3]
 
     def __init__(self, experiment_dictionary):

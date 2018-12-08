@@ -1,6 +1,7 @@
 import csv
 import math
 import re
+import subprocess
 from itertools import islice
 
 from standard_lib import StdLib
@@ -180,7 +181,7 @@ class MemtierParser(Parser):
                 result[key] = None
 
         if 'Request_Throughput' in set(dict1):
-            keys_to_average = ['Response_Time', 'Hits', 'Misses']
+            keys_to_average = ['Response_Time']
             for key in keys_to_average:
                 if key in set(dict1):
                     if dict1['Request_Throughput'] is None or dict1[key] is None:
@@ -296,6 +297,9 @@ class MemtierParser(Parser):
             if path_interpretation['type'] == 'GET':
                 self.get_observed = {'Request_Throughput': average_throughput, 'Hits': None, 'Misses': None,
                                      'Response_Time': average_response_time, 'Data_Throughput': None}
+                t = MemtierParser.get_line_from_summary(base_path, base_filename)
+                self.get_observed['Hits'] = t['Hits']
+                self.get_observed['Misses'] = t['Misses']
             elif path_interpretation['type'] == 'SET':
                 self.set_observed = {'Request_Throughput': average_throughput,
                                      'Response_Time': average_response_time, 'Data_Throughput': None}
@@ -306,9 +310,19 @@ class MemtierParser(Parser):
                                      'Response_Time': average_response_time, 'Data_Throughput': None}
                 self.set_observed = {'Request_Throughput': average_throughput / 2,
                                      'Response_Time': average_response_time, 'Data_Throughput': None}
+                t = MemtierParser.get_line_from_summary(base_path, base_filename)
+                self.get_observed['Hits'] = t['Hits']
+                self.get_observed['Misses'] = t['Misses']
 
         self.set_interactive = Parser.interactive_law_check(self.set_observed, self.clients)
         self.get_interactive = Parser.interactive_law_check(self.get_observed, self.clients)
+        
+    @staticmethod
+    def get_line_from_summary(base_path, base_filename):
+        with open(base_path.joinpath(base_filename + '.stdout'), "r") as file:
+            for line in file:
+                if re.match(r"^Gets", line):
+                    return MemtierParser.parse_result_line(line)
 
     @staticmethod
     def extract_stable_window(history_list):
@@ -338,7 +352,7 @@ class MemtierParser(Parser):
         if r_type == 'Gets':
             hits = StdLib.get_sane_double(hits)
             misses = StdLib.get_sane_double(misses)
-            return {'Request_Throughput': throughput, 'Hits:': hits, 'Misses': misses, 'Response_Time': response_time,
+            return {'Request_Throughput': throughput, 'Hits': hits, 'Misses': misses, 'Response_Time': response_time,
                     'Data_Throughput': data_throughput}
         else:
             return {'Request_Throughput': throughput, 'Response_Time': response_time,
@@ -403,7 +417,7 @@ class MiddlewareParser(Parser):
                 result[key] = None
 
         if 'Request_Throughput' in set(dict1):
-            keys_to_average = ['Response_Time', 'Queue_Size', 'RTT', 'Queue_Waiting_Time', 'Hits', 'Misses']
+            keys_to_average = ['Response_Time', 'Queue_Size', 'RTT', 'Queue_Waiting_Time', 'Request_Size']
             for key in keys_to_average:
                 if key in set(dict1):
                     if dict1['Request_Throughput'] is None or dict1[key] is None:
@@ -479,7 +493,9 @@ class MiddlewareParser(Parser):
             self.get_observed['Queue_Size'] = queue_average
         else:
             self.parse_multiget_list(table_rows)
+            key_distribution = MiddlewareParser.tail(mw_path.joinpath('multiget_summary.txt'))
             self.get_observed['Queue_Size'] = queue_average
+            self.get_observed['Key_Distribution'] = tuple(key_distribution.split())
 
     def parse_histogram(self, base_path, r_type):
         mw_path = base_path.joinpath('mw-stats')
@@ -528,8 +544,8 @@ class MiddlewareParser(Parser):
         memcached_waiting_time /= 1e6
         rtt /= 1e6
 
-        self.set_observed = {'Request_Throughput': throughput, 'Response_Time': memcached_waiting_time,
-                             'Queue_Waiting_Time': queue_waiting_time, 'RTT': rtt}
+        self.set_observed = {'Request_Throughput': throughput, 'Response_Time': rtt,
+                             'Queue_Waiting_Time': queue_waiting_time, 'Memcached_Communication': memcached_waiting_time}
 
     def parse_get_list(self, rows):
         _, throughput, queue_waiting_time, memcached_waiting_time, rtt, misses = map(lambda x: x / self.seconds,
@@ -538,27 +554,33 @@ class MiddlewareParser(Parser):
         queue_waiting_time /= 1e6
         memcached_waiting_time /= 1e6
         rtt /= 1e6
-        miss_rate = misses/throughput
-        hit_rate = 1 - miss_rate
+        hits = throughput - misses
 
-        self.get_observed = {'Request_Throughput': throughput, 'Response_Time': memcached_waiting_time,
-                             'Queue_Waiting_Time': queue_waiting_time, 'RTT': rtt,
-                             'Hits': hit_rate, 'Misses': miss_rate}
+        self.get_observed = {'Request_Throughput': throughput, 'Response_Time': rtt,
+                             'Queue_Waiting_Time': queue_waiting_time, 'Memcached_Communication': memcached_waiting_time,
+                             'Hits': hits, 'Misses': misses,
+                             'Request_Size': 1, 'Key_Throughput': throughput}
 
     def parse_multiget_list(self, rows):
-        _, throughput, queue_waiting_time, memcached_waiting_time, rtt, misses, keysize, keys_requested = \
+        _, throughput, queue_waiting_time, memcached_waiting_time, rtt, misses, keys_requested, keysize = \
             map(lambda x: x / self.seconds, [sum(x) for x in zip(*rows)])
 
         queue_waiting_time /= 1e6
         memcached_waiting_time /= 1e6
         rtt /= 1e6
-        miss_rate = misses/keys_requested
-        hit_rate = 1 - miss_rate
+        hits = keys_requested - misses
 
-        self.get_observed = {'Request_Throughput': throughput, 'Response_Time': memcached_waiting_time,
-                             'Queue_Waiting_Time': queue_waiting_time, 'RTT': rtt,
-                             'Hits': hit_rate, 'Misses': miss_rate,
+        self.get_observed = {'Request_Throughput': throughput, 'Response_Time': rtt,
+                             'Queue_Waiting_Time': queue_waiting_time, 'Memcached_Communication': memcached_waiting_time,
+                             'Hits': hits, 'Misses': misses,
                              'Request_Size': keysize, 'Key_Throughput': keys_requested}
+
+    @staticmethod
+    def tail(filename):
+        proc = subprocess.Popen(['tail', '-n 1', filename], stdout=subprocess.PIPE)
+        lines = proc.stdout.readlines()
+        result = lines[0].decode('ascii')
+        return result[:-2]
 
     @staticmethod
     def transform_to_fixed_size_buckets(percentages_histogram, expected_buckets=200):

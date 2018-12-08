@@ -1,4 +1,5 @@
 from functools import reduce
+from pathlib import Path
 
 import pandas as pd
 
@@ -65,14 +66,14 @@ class DataCollector:
                     if repetition not in req_type[r_type][wt_count][tc_count][hostname]:
                         req_type[r_type][wt_count][tc_count][hostname][repetition] = {}
 
-                    memtier_instances = []
-                    for memtier_target in self.exp_desc['memtier_targets']:
-                        memtier_parser = MemtierParser()
-                        memtier_parser.parse_file(path, memtier_target, histograms=histograms)
-                        memtier_instances.append(memtier_parser)
-
-                    memtier_experiment_results = reduce(lambda item1, item2: item1 + item2, memtier_instances)
-                    req_type[r_type][wt_count][tc_count][hostname][repetition] = memtier_experiment_results
+                    if Path(path).exists():
+                        memtier_instances = []
+                        for memtier_target in self.exp_desc['memtier_targets']:
+                            memtier_parser = MemtierParser()
+                            memtier_parser.parse_file(path, memtier_target, histograms=histograms)
+                            memtier_instances.append(memtier_parser)
+                        memtier_experiment_results = reduce(lambda item1, item2: item1 + item2, memtier_instances)
+                        req_type[r_type][wt_count][tc_count][hostname][repetition] = memtier_experiment_results
             self.memtier_raw_results = req_type
         else:
             for key, val in self.middleware_paths.items():
@@ -88,10 +89,10 @@ class DataCollector:
                     if repetition not in req_type[r_type][wt_count][tc_count][hostname]:
                         req_type[r_type][wt_count][tc_count][hostname][repetition] = {}
 
-                    middleware_parser = MiddlewareParser()
-                    middleware_parser.parse_dir(path, memtier_count, histograms=histograms)
-
-                    req_type[r_type][wt_count][tc_count][hostname][repetition] = middleware_parser
+                    if Path(path.joinpath('mw-stats')).exists():
+                        middleware_parser = MiddlewareParser()
+                        middleware_parser.parse_dir(path, memtier_count, histograms=histograms)
+                        req_type[r_type][wt_count][tc_count][hostname][repetition] = middleware_parser
             self.middleware_raw_results = req_type
 
 
@@ -121,56 +122,57 @@ class MemtierCollector(DataCollector):
                 for tc, tc_dict in wc_dict.items():
                     for host, host_dict in tc_dict.items():
                         for rep, mt_result in host_dict.items():
-                            mt_dict = mt_result.get_as_dict()
-                            single_row = {'Type': req,
-                                          'Worker_Threads': int(wc),
-                                          'Num_Clients': int(tc),
-                                          'Host': host,
-                                          'Repetition': int(rep),
-                                          'Seconds': mt_dict['Seconds']}
-                            row_copy_interactive = single_row.copy()
+                            if mt_result:
+                                mt_dict = mt_result.get_as_dict()
+                                single_row = {'Type': req,
+                                              'Worker_Threads': int(wc),
+                                              'Num_Clients': int(tc),
+                                              'Host': host,
+                                              'Repetition': int(rep),
+                                              'Seconds': mt_dict['Seconds']}
+                                row_copy_interactive = single_row.copy()
 
-                            if req is 'GET':
-                                for key, value in mt_dict[req + '_Observed'].items():
-                                    single_row[key] = value
-                                df_rows_get.append(single_row)
+                                if req is 'GET':
+                                    for key, value in mt_dict[req + '_Observed'].items():
+                                        single_row[key] = value
+                                    df_rows_get.append(single_row)
 
-                                row_copy_interactive['Type'] = req + '_Interactive'
-                                for key, value in mt_dict[req + '_Interactive'].items():
-                                    row_copy_interactive[key] = value
+                                    row_copy_interactive['Type'] = req + '_Interactive'
+                                    for key, value in mt_dict[req + '_Interactive'].items():
+                                        row_copy_interactive[key] = value
+                                    df_rows_get.append(row_copy_interactive)
+                                    continue
+                                if req is 'SET':
+                                    for key, value in mt_dict[req + '_Observed'].items():
+                                        single_row[key] = value
+                                    df_rows_set.append(single_row)
+
+                                    row_copy_interactive['Type'] = req + '_Interactive'
+                                    for key, value in mt_dict[req + '_Interactive'].items():
+                                        row_copy_interactive[key] = value
+                                    df_rows_set.append(row_copy_interactive)
+                                    continue
+
+                                # We have a multi-type experiment, let's store the numbers in their respective tables
+                                single_row_get = single_row.copy()
+                                row_copy_get = single_row_get.copy()
+                                for key, value in mt_dict['GET_Observed'].items():
+                                    single_row_get[key] = value
+                                df_rows_get.append(single_row_get)
+
+                                row_copy_get['Type'] = req + '_Interactive'
+                                for key, value in mt_dict['GET_Interactive'].items():
+                                    row_copy_get[key] = value
                                 df_rows_get.append(row_copy_interactive)
-                                continue
-                            if req is 'SET':
-                                for key, value in mt_dict[req + '_Observed'].items():
+
+                                for key, value in mt_dict['SET_Observed'].items():
                                     single_row[key] = value
                                 df_rows_set.append(single_row)
 
                                 row_copy_interactive['Type'] = req + '_Interactive'
-                                for key, value in mt_dict[req + '_Interactive'].items():
+                                for key, value in mt_dict['SET_Interactive'].items():
                                     row_copy_interactive[key] = value
                                 df_rows_set.append(row_copy_interactive)
-                                continue
-
-                            # We have a multi-type experiment, let's store the numbers in their respective tables
-                            single_row_get = single_row.copy()
-                            row_copy_get = single_row_get.copy()
-                            for key, value in mt_dict['GET_Observed'].items():
-                                single_row_get[key] = value
-                            df_rows_get.append(single_row_get)
-
-                            row_copy_get['Type'] = req + '_Interactive'
-                            for key, value in mt_dict['GET_Interactive'].items():
-                                row_copy_get[key] = value
-                            df_rows_get.append(row_copy_interactive)
-
-                            for key, value in mt_dict['SET_Observed'].items():
-                                single_row[key] = value
-                            df_rows_set.append(single_row)
-
-                            row_copy_interactive['Type'] = req + '_Interactive'
-                            for key, value in mt_dict['SET_Interactive'].items():
-                                row_copy_interactive[key] = value
-                            df_rows_set.append(row_copy_interactive)
 
         self.dataframe_set = pd.DataFrame(df_rows_set)
         self.dataframe_get = pd.DataFrame(df_rows_get)
@@ -187,46 +189,47 @@ class MemtierCollector(DataCollector):
                 for tc, tc_dict in wc_dict.items():
                     for host, host_dict in tc_dict.items():
                         for rep, mt_result in host_dict.items():
-                            mt_dict = mt_result.get_as_dict()
+                            if mt_result:
+                                mt_dict = mt_result.get_as_dict()
 
-                            single_row = {'Type': req,
-                                          'Worker_Threads': int(wc),
-                                          'Num_Clients': int(tc),
-                                          'Host': host,
-                                          'Repetition': int(rep),
-                                          'Seconds': mt_dict['Seconds']}
+                                single_row = {'Type': req,
+                                              'Worker_Threads': int(wc),
+                                              'Num_Clients': int(tc),
+                                              'Host': host,
+                                              'Repetition': int(rep),
+                                              'Seconds': mt_dict['Seconds']}
 
-                            if req is 'GET':
+                                if req is 'GET':
+                                    for key, value in mt_dict['GET_Histogram_Percentage'].items():
+                                        row_copy = single_row.copy()
+                                        row_copy['Bucket'] = key
+                                        row_copy['Percentage'] = value
+                                        row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
+                                        df_rows_get.append(row_copy)
+                                    continue
+                                if req is 'SET':
+                                    for key, value in mt_dict['SET_Histogram_Percentage'].items():
+                                        row_copy = single_row.copy()
+                                        row_copy['Bucket'] = key
+                                        row_copy['Percentage'] = value
+                                        row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
+                                        df_rows_set.append(row_copy)
+                                    continue
+
+                                # We have a multi-type experiment, let's store the numbers in their respective tables
                                 for key, value in mt_dict['GET_Histogram_Percentage'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
                                     row_copy['Percentage'] = value
                                     row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
                                     df_rows_get.append(row_copy)
-                                continue
-                            if req is 'SET':
+
                                 for key, value in mt_dict['SET_Histogram_Percentage'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
                                     row_copy['Percentage'] = value
                                     row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
                                     df_rows_set.append(row_copy)
-                                continue
-
-                            # We have a multi-type experiment, let's store the numbers in their respective tables
-                            for key, value in mt_dict['GET_Histogram_Percentage'].items():
-                                row_copy = single_row.copy()
-                                row_copy['Bucket'] = key
-                                row_copy['Percentage'] = value
-                                row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
-                                df_rows_get.append(row_copy)
-
-                            for key, value in mt_dict['SET_Histogram_Percentage'].items():
-                                row_copy = single_row.copy()
-                                row_copy['Bucket'] = key
-                                row_copy['Percentage'] = value
-                                row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
-                                df_rows_set.append(row_copy)
 
         self.dataframe_histogram_set = pd.DataFrame(df_rows_set)
         self.dataframe_histogram_get = pd.DataFrame(df_rows_get)
@@ -263,56 +266,57 @@ class MiddlewareCollector(DataCollector):
                 for tc, tc_dict in wc_dict.items():
                     for host, host_dict in tc_dict.items():
                         for rep, mt_result in host_dict.items():
-                            mt_dict = mt_result.get_as_dict()
-                            single_row = {'Type': req,
-                                          'Worker_Threads': int(wc),
-                                          'Num_Clients': int(tc),
-                                          'Host': host,
-                                          'Repetition': int(rep),
-                                          'Seconds': mt_dict['Seconds']}
-                            row_copy_interactive = single_row.copy()
+                            if mt_result:
+                                mt_dict = mt_result.get_as_dict()
+                                single_row = {'Type': req,
+                                              'Worker_Threads': int(wc),
+                                              'Num_Clients': int(tc),
+                                              'Host': host,
+                                              'Repetition': int(rep),
+                                              'Seconds': mt_dict['Seconds']}
+                                row_copy_interactive = single_row.copy()
 
-                            if req is 'GET':
-                                for key, value in mt_dict[req + '_Observed'].items():
-                                    single_row[key] = value
-                                df_rows_get.append(single_row)
+                                if req is 'GET':
+                                    for key, value in mt_dict[req + '_Observed'].items():
+                                        single_row[key] = value
+                                    df_rows_get.append(single_row)
 
-                                row_copy_interactive['Type'] = req + '_Interactive'
-                                for key, value in mt_dict[req + '_Interactive'].items():
-                                    row_copy_interactive[key] = value
+                                    row_copy_interactive['Type'] = req + '_Interactive'
+                                    for key, value in mt_dict[req + '_Interactive'].items():
+                                        row_copy_interactive[key] = value
+                                    df_rows_get.append(row_copy_interactive)
+                                    continue
+                                if req is 'SET':
+                                    for key, value in mt_dict[req + '_Observed'].items():
+                                        single_row[key] = value
+                                    df_rows_set.append(single_row)
+
+                                    row_copy_interactive['Type'] = req + '_Interactive'
+                                    for key, value in mt_dict[req + '_Interactive'].items():
+                                        row_copy_interactive[key] = value
+                                    df_rows_set.append(row_copy_interactive)
+                                    continue
+
+                                # We have a multi-type experiment, let's store the numbers in their respective tables
+                                single_row_get = single_row.copy()
+                                row_copy_get = single_row_get.copy()
+                                for key, value in mt_dict['GET_Observed'].items():
+                                    single_row_get[key] = value
+                                df_rows_get.append(single_row_get)
+
+                                row_copy_get['Type'] = req + '_Interactive'
+                                for key, value in mt_dict['GET_Interactive'].items():
+                                    row_copy_get[key] = value
                                 df_rows_get.append(row_copy_interactive)
-                                continue
-                            if req is 'SET':
-                                for key, value in mt_dict[req + '_Observed'].items():
+
+                                for key, value in mt_dict['SET_Observed'].items():
                                     single_row[key] = value
                                 df_rows_set.append(single_row)
 
                                 row_copy_interactive['Type'] = req + '_Interactive'
-                                for key, value in mt_dict[req + '_Interactive'].items():
+                                for key, value in mt_dict['SET_Interactive'].items():
                                     row_copy_interactive[key] = value
                                 df_rows_set.append(row_copy_interactive)
-                                continue
-
-                            # We have a multi-type experiment, let's store the numbers in their respective tables
-                            single_row_get = single_row.copy()
-                            row_copy_get = single_row_get.copy()
-                            for key, value in mt_dict['GET_Observed'].items():
-                                single_row_get[key] = value
-                            df_rows_get.append(single_row_get)
-
-                            row_copy_get['Type'] = req + '_Interactive'
-                            for key, value in mt_dict['GET_Interactive'].items():
-                                row_copy_get[key] = value
-                            df_rows_get.append(row_copy_interactive)
-
-                            for key, value in mt_dict['SET_Observed'].items():
-                                single_row[key] = value
-                            df_rows_set.append(single_row)
-
-                            row_copy_interactive['Type'] = req + '_Interactive'
-                            for key, value in mt_dict['SET_Interactive'].items():
-                                row_copy_interactive[key] = value
-                            df_rows_set.append(row_copy_interactive)
 
         self.dataframe_set = pd.DataFrame(df_rows_set)
         self.dataframe_get = pd.DataFrame(df_rows_get)
@@ -329,46 +333,47 @@ class MiddlewareCollector(DataCollector):
                 for tc, tc_dict in wc_dict.items():
                     for host, host_dict in tc_dict.items():
                         for rep, mt_result in host_dict.items():
-                            mt_dict = mt_result.get_as_dict()
+                            if mt_result:
+                                mt_dict = mt_result.get_as_dict()
 
-                            single_row = {'Type': req,
-                                          'Worker_Threads': int(wc),
-                                          'Num_Clients': int(tc),
-                                          'Host': host,
-                                          'Repetition': int(rep),
-                                          'Seconds': mt_dict['Seconds']}
+                                single_row = {'Type': req,
+                                              'Worker_Threads': int(wc),
+                                              'Num_Clients': int(tc),
+                                              'Host': host,
+                                              'Repetition': int(rep),
+                                              'Seconds': mt_dict['Seconds']}
 
-                            if req is 'GET':
+                                if req is 'GET':
+                                    for key, value in mt_dict['GET_Histogram_Percentage'].items():
+                                        row_copy = single_row.copy()
+                                        row_copy['Bucket'] = key
+                                        row_copy['Percentage'] = value
+                                        row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
+                                        df_rows_get.append(row_copy)
+                                    continue
+                                if req is 'SET':
+                                    for key, value in mt_dict['SET_Histogram_Percentage'].items():
+                                        row_copy = single_row.copy()
+                                        row_copy['Bucket'] = key
+                                        row_copy['Percentage'] = value
+                                        row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
+                                        df_rows_set.append(row_copy)
+                                    continue
+
+                                # We have a multi-type experiment, let's store the numbers in their respective tables
                                 for key, value in mt_dict['GET_Histogram_Percentage'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
                                     row_copy['Percentage'] = value
                                     row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
                                     df_rows_get.append(row_copy)
-                                continue
-                            if req is 'SET':
+
                                 for key, value in mt_dict['SET_Histogram_Percentage'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
                                     row_copy['Percentage'] = value
                                     row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
                                     df_rows_set.append(row_copy)
-                                continue
-
-                            # We have a multi-type experiment, let's store the numbers in their respective tables
-                            for key, value in mt_dict['GET_Histogram_Percentage'].items():
-                                row_copy = single_row.copy()
-                                row_copy['Bucket'] = key
-                                row_copy['Percentage'] = value
-                                row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
-                                df_rows_get.append(row_copy)
-
-                            for key, value in mt_dict['SET_Histogram_Percentage'].items():
-                                row_copy = single_row.copy()
-                                row_copy['Bucket'] = key
-                                row_copy['Percentage'] = value
-                                row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
-                                df_rows_set.append(row_copy)
 
         self.dataframe_histogram_set = pd.DataFrame(df_rows_set)
         self.dataframe_histogram_get = pd.DataFrame(df_rows_get)
