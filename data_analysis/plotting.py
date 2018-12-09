@@ -5,6 +5,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.stats as stats
 
 from experiment_definitions import ExperimentDefinitions
 from data_collectors import MemtierCollector, MiddlewareCollector
@@ -55,6 +56,26 @@ class PlottingFunctions:
                                                         xlim=xlim, ylim=ylim)
         if xticks is not None:
             plt.xticks(*xticks)
+        if save_as_filename is None:
+            plt.show(dpi=300)
+        else:
+            ExperimentPlotter.save_figure(save_as_filename)
+
+    @staticmethod
+    def resplot(dataframe, experiment_title, save_as_filename,
+                x=None, y=None,
+                xlabel=None, ylabel=None):
+        sns.residplot(x, y, dataframe).set(xlabel=xlabel, ylabel=ylabel, title=experiment_title)
+        if save_as_filename is None:
+            plt.show(dpi=300)
+        else:
+            ExperimentPlotter.save_figure(save_as_filename)
+
+    @staticmethod
+    def qqplot(dataframe, experiment_title, save_as_filename,
+               x=None, fit_line=False):
+        stats.probplot(dataframe[x], dist="norm", fit=fit_line, plot=plt)
+        plt.title(experiment_title)
         if save_as_filename is None:
             plt.show(dpi=300)
         else:
@@ -807,6 +828,7 @@ class ExperimentPlotter:
     @staticmethod
     def exp_6_pretty_table(exp_list):
         exp_tables = []
+        exp_tables_readable = []
         for key, value in exp_list:
             mw_count = len(key['memtier_targets'])
             mc_count = len(key['memcached_servers'])
@@ -814,24 +836,73 @@ class ExperimentPlotter:
             gets = value[1][~value[1].Type.str.contains('Interactive')].groupby(['Repetition', 'Worker_Threads', 'Type'])
 
             data_list = [sets, gets]
+            throughputs = []
+            response_times = []
             list_throughput = [StatisticsFunctions.get_sum(df, 'Request_Throughput') for df in data_list]
+            list_throughput_averages = [StatisticsFunctions.get_average(df.groupby(['Worker_Threads']), 'Request_Throughput') for df in list_throughput]
+            for run_results, average in zip(list_throughput, list_throughput_averages):
+                run_results['Request_Throughput_Residual'] = run_results.Request_Throughput - run_results.Worker_Threads.map(dict(zip(average.Worker_Threads.values, average.Request_Throughput)))
+                average.rename(index=str, columns={'Request_Throughput': 'Request_Throughput_Mean'}, inplace=True)
+                throughputs.append(pd.DataFrame.merge(run_results, average, on=['Worker_Threads']))
             list_response_time = [StatisticsFunctions.get_average(df, 'Response_Time') for df in data_list]
-            throughput_df = pd.concat(list_throughput)
-            response_time_df = pd.concat(list_response_time)
+            list_response_time_averages = [
+                StatisticsFunctions.get_average(df.groupby(['Worker_Threads']), 'Response_Time') for df in
+                list_response_time]
+            for run_results, average in zip(list_response_time, list_response_time_averages):
+                run_results['Response_Time_Residual'] = run_results.Response_Time - run_results.Worker_Threads.map(
+                    dict(zip(average.Worker_Threads.values, average.Response_Time)))
+                average.rename(index=str, columns={'Response_Time': 'Response_Time_Mean'}, inplace=True)
+                response_times.append(pd.DataFrame.merge(run_results, average, on=['Worker_Threads']))
+            throughput_df = pd.concat(throughputs)
+            response_time_df = pd.concat(response_times)
             summary = pd.merge(throughput_df, response_time_df, on=['Repetition', 'Worker_Threads', 'Type'])
-            summary = summary.groupby(['Type', 'Worker_Threads'])
-            summary = summary.agg(lambda x: tuple(x)).reset_index()
-            summary = summary.drop(['Repetition'], axis=1)
             summary['Middlewares'] = mw_count
             summary['Memcached'] = mc_count
-            summary = summary[['Type', 'Memcached', 'Middlewares', 'Worker_Threads', 'Request_Throughput', 'Response_Time']]
+            summary_table = summary.reset_index().pivot_table(
+                values=['Request_Throughput', 'Request_Throughput_Residual', 'Response_Time', 'Response_Time_Residual'],
+                index=['Type', 'Memcached', 'Middlewares', 'Worker_Threads',
+                       'Request_Throughput_Mean', 'Response_Time_Mean'], columns='Repetition')
+            summary_table.columns = ['{}_{}'.format(x, y) for x, y in zip(summary_table.columns.get_level_values(0),
+                                                                          summary_table.columns.get_level_values(1))]
+            exp_tables_readable.append(summary_table)
+            summary = summary[['Type', 'Memcached', 'Middlewares', 'Worker_Threads',
+                               'Request_Throughput', 'Request_Throughput_Residual', 'Request_Throughput_Mean',
+                               'Response_Time', 'Response_Time_Residual', 'Response_Time_Mean']]
             exp_tables.append(summary)
 
         result = pd.concat(exp_tables)
-        result = result.sort_values(by=['Type', 'Memcached', 'Middlewares'])
+        result_print = pd.concat(exp_tables_readable)
+        result = result.sort_values(by=['Type', 'Memcached', 'Middlewares', 'Worker_Threads'])
+        
+        result_throughput = result[['Type', 'Request_Throughput_Mean', 'Request_Throughput_Residual']]
+        result_response_time = result[['Type', 'Response_Time_Mean', 'Response_Time_Residual']]
+
+        throughput_get = result_throughput[~result_throughput.Type.str.contains('SET')]
+        throughput_set = result_throughput[~result_throughput.Type.str.contains('GET')]
+        response_time_get = result_response_time[~result_response_time.Type.str.contains('SET')]
+        response_time_set = result_response_time[~result_response_time.Type.str.contains('GET')]
+
+
+        PlottingFunctions.resplot(throughput_set, "Experiment 6 - SET", None, x='Request_Throughput_Mean',
+                                  y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
+                                  ylabel='Residual')
+        PlottingFunctions.resplot(throughput_get, "Experiment 6 - GET", None, x='Request_Throughput_Mean',
+                                  y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
+                                  ylabel='Residual')
+        PlottingFunctions.resplot(response_time_set, "Experiment 6 - SET", None, x='Response_Time_Mean',
+                                  y='Response_Time_Residual', xlabel='Mean Response Time',
+                                  ylabel='Residual')
+        PlottingFunctions.resplot(response_time_get, "Experiment 6 - GET", None, x='Response_Time_Mean',
+                                  y='Response_Time_Residual', xlabel='Mean Response Time',
+                                  ylabel='Residual')
+
+        PlottingFunctions.qqplot(throughput_set, "Experiment 6 - SET Throughput", None, x='Request_Throughput_Residual')
+        PlottingFunctions.qqplot(throughput_get, "Experiment 6 - GET Throughput", None, x='Request_Throughput_Residual')
+        PlottingFunctions.qqplot(response_time_set, "Experiment 6 - SET Response Time", None, x='Response_Time_Residual')
+        PlottingFunctions.qqplot(response_time_get, "Experiment 6 - GET Response Time", None, x='Response_Time_Residual')
 
         print("2K Analysis Table:")
-        print(result)
+        print(result_print)
         print("====================\n")
 
     @staticmethod
@@ -853,11 +924,11 @@ class ExperimentPlotter:
 
     @staticmethod
     def experiment_3():
-        data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_31())
-        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31())
+        #data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_31())
+        #ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31())
 
-        data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_31())
-        ExperimentPlotter.middleware_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31())
+        #data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_31())
+        #ExperimentPlotter.middleware_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31())
 
         data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_32())
         ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_32())
@@ -933,5 +1004,5 @@ if __name__ == '__main__':
     # ExperimentPlotter.experiment_3()
     # ExperimentPlotter.experiment_4()
     # ExperimentPlotter.experiment_5()
-    # ExperimentPlotter.experiment_6()
+    ExperimentPlotter.experiment_6()
     # ExperimentPlotter.experiment_7()
