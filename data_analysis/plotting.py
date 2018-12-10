@@ -1,4 +1,6 @@
 import math
+import os
+import pathlib
 from functools import reduce
 
 import pandas as pd
@@ -32,7 +34,7 @@ class PlottingFunctions:
         else:
             plt.xticks(xticks)
         if huelabel is not None or stylelabel is not None:
-            legend = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            legend = plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
             for txt in legend.get_texts():
                 if txt.get_text() is hue and huelabel is not None:
                     txt.set_text(huelabel)
@@ -57,7 +59,7 @@ class PlottingFunctions:
         if xticks is not None:
             plt.xticks(*xticks)
         if save_as_filename is None:
-            plt.show(dpi=300)
+            plt.show()
         else:
             ExperimentPlotter.save_figure(save_as_filename)
 
@@ -67,7 +69,7 @@ class PlottingFunctions:
                 xlabel=None, ylabel=None):
         sns.residplot(x, y, dataframe).set(xlabel=xlabel, ylabel=ylabel, title=experiment_title)
         if save_as_filename is None:
-            plt.show(dpi=300)
+            plt.show()
         else:
             ExperimentPlotter.save_figure(save_as_filename)
 
@@ -77,7 +79,7 @@ class PlottingFunctions:
         stats.probplot(dataframe[x], dist="norm", fit=fit_line, plot=plt)
         plt.title(experiment_title)
         if save_as_filename is None:
-            plt.show(dpi=300)
+            plt.show()
         else:
             ExperimentPlotter.save_figure(save_as_filename)
 
@@ -167,58 +169,102 @@ class StatisticsFunctions:
                                                                                     columns={"level_2": 'Percentile'})
 
     @staticmethod
-    def mm1(lamb, muh):
-        traffic_intensity = lamb / muh
+    def mm1(summary_table, to_plot):
+        calculations = []
+        for row in summary_table.itertuples():
+            lamb = row[4]
+            muh = row[-1]
+            measured_response_time = row[6]
+            measured_queue_waiting_time = row[8]
+            measured_queue_size = row[12]
 
-        mean_nr_jobs_in_system = traffic_intensity / (1 - traffic_intensity)
+            traffic_intensity = lamb / muh
+            mean_nr_jobs_in_system = traffic_intensity / (1 - traffic_intensity)
+            mean_nr_jobs_in_queue = traffic_intensity * mean_nr_jobs_in_system
+            mean_response_time = (1 / muh) / (1 - traffic_intensity)
+            mean_waiting_time = traffic_intensity * mean_response_time
 
-        mean_nr_jobs_in_queue = traffic_intensity * mean_nr_jobs_in_system
+            calculations.append({'Num_Clients': row[1],
+                                 'Worker_Threads': row[2],
+                                 'Maximum_Service_Rate': muh,
+                                 'Arrival_Rate': lamb,
+                                 'Traffic_Intensity': traffic_intensity,
+                                 'Mean_Number_Jobs_System': mean_nr_jobs_in_system,
+                                 'Measured_Response_Time': measured_response_time,
+                                 'Estimated_Response_Time': mean_response_time * 1000,
+                                 'Measured_Queue_Waiting_Time': measured_queue_waiting_time,
+                                 'Estimated_Queue_Waiting_Time': mean_waiting_time * 1000,
+                                 'Measured_Queue_Size': measured_queue_size,
+                                 'Estimated_Queue_Size': mean_nr_jobs_in_queue})
 
-        mean_response_time = (1 / muh) / (1 - traffic_intensity)
-
-        mean_waiting_time = traffic_intensity * mean_response_time
-
-        return {'Traffic Intensity': traffic_intensity, 'Mean Number of Jobs in Queue': mean_nr_jobs_in_queue,
-                'Mean Number of Jobs In System': mean_nr_jobs_in_system,
-                'Mean Response Time': mean_response_time * 1000,
-                'Mean Waiting Time': mean_waiting_time * 1000}
+        mm1_analysis = pd.DataFrame(calculations)
+        mm1_analysis = mm1_analysis[['Num_Clients', 'Worker_Threads', 'Maximum_Service_Rate', 'Arrival_Rate',
+                                     'Traffic_Intensity', 'Mean_Number_Jobs_System', 'Measured_Response_Time',
+                                     'Estimated_Response_Time', 'Measured_Queue_Waiting_Time',
+                                     'Estimated_Queue_Waiting_Time', 'Measured_Queue_Size', 'Estimated_Queue_Size']]
+        return mm1_analysis
 
     @staticmethod
-    def mmm(lamb, muh, servers):
-        traffic_intensity = lamb / (muh * servers)
+    def mmm(summary_table, to_plot):
+        calculations = []
+        for row in summary_table.itertuples():
+            lamb = row[4]
+            servers = row[2] * 2
+            muh = row[-1] / servers
+            measured_response_time = row[6]
+            measured_queue_waiting_time = row[8]
+            measured_queue_size = row[12]
 
-        _param1 = math.pow(servers * traffic_intensity, servers) / (math.factorial(servers) * (1 - traffic_intensity))
+            traffic_intensity = lamb / (muh * servers)
+            _param1 = math.pow(servers * traffic_intensity, servers) / (math.factorial(servers) * (1 - traffic_intensity))
+            probability_zero_jobs_in_system = 1 / (1 + _param1 +
+                                                   sum([pow(servers * traffic_intensity, n) / math.factorial(n) for n in
+                                                        range(1, servers)]))
+            probability_of_queueing = probability_zero_jobs_in_system * _param1
+            mean_number_jobs_in_queue = (traffic_intensity * probability_of_queueing) / (1 - traffic_intensity)
+            mean_number_jobs_in_system = servers * traffic_intensity + mean_number_jobs_in_queue
+            average_utilization_each_server = traffic_intensity
+            mean_response_time = (1 / muh) * (1 + probability_of_queueing / (servers * (1 - traffic_intensity)))
+            mean_waiting_time = mean_number_jobs_in_queue / lamb
 
-        probability_zero_jobs_in_system = 1 / (1 + _param1 +
-                                               sum([pow(servers * traffic_intensity, n) / math.factorial(n) for n in
-                                                    range(1, servers)]))
+            calculations.append({'Num_Clients': row[1],
+                                 'Worker_Threads': row[2],
+                                 'Maximum_Service_Rate': muh,
+                                 'Arrival_Rate': lamb,
+                                 'Traffic_Intensity': traffic_intensity,
+                                 'Mean_Number_Jobs_System': mean_number_jobs_in_system,
+                                 'Measured_Response_Time': measured_response_time,
+                                 'Estimated_Response_Time': mean_response_time * 1000,
+                                 'Measured_Queue_Waiting_Time': measured_queue_waiting_time,
+                                 'Estimated_Queue_Waiting_Time': mean_waiting_time * 1000,
+                                 'Measured_Queue_Size': measured_queue_size,
+                                 'Estimated_Queue_Size': mean_number_jobs_in_queue,
+                                 'Probability_Zero_Jobs_System': probability_zero_jobs_in_system,
+                                 'Probability_Queueing': probability_of_queueing,
+                                 'Mean_Average_Utilization_Each_Server': average_utilization_each_server})
 
-        probability_of_queueing = probability_zero_jobs_in_system * _param1
+        mmm_analysis = pd.DataFrame(calculations)
+        mmm_analysis = mmm_analysis[['Num_Clients', 'Worker_Threads', 'Maximum_Service_Rate', 'Arrival_Rate',
+                                     'Traffic_Intensity', 'Mean_Number_Jobs_System', 'Measured_Response_Time',
+                                     'Estimated_Response_Time', 'Measured_Queue_Waiting_Time',
+                                     'Estimated_Queue_Waiting_Time', 'Measured_Queue_Size', 'Estimated_Queue_Size',
+                                     'Probability_Zero_Jobs_System', 'Probability_Queueing',
+                                     'Mean_Average_Utilization_Each_Server']]
 
-        mean_number_jobs_in_queue = (traffic_intensity * probability_of_queueing) / (1 - traffic_intensity)
-
-        mean_number_jobs_in_system = servers * traffic_intensity + mean_number_jobs_in_queue
-
-        average_utilization_each_server = traffic_intensity
-
-        mean_response_time = (1 / muh) * (1 + probability_of_queueing / (servers * (1 - traffic_intensity)))
-
-        mean_waiting_time = mean_number_jobs_in_queue / lamb
-
-        return {'Traffic Intensity': traffic_intensity, 'Mean Number of Jobs in Queue': mean_number_jobs_in_queue,
-                'Mean Number of Jobs In System': mean_number_jobs_in_system,
-                'Mean Response Time': mean_response_time * 1000,
-                'Mean Waiting Time': mean_waiting_time * 1000,
-                'Probability of Zero Jobs in System': probability_zero_jobs_in_system,
-                'Probability of Queueing': probability_of_queueing,
-                'Mean Average Utilization of Each Server': average_utilization_each_server}
+        return mmm_analysis
 
 
 class ExperimentPlotter:
 
     @staticmethod
     def save_figure(save_as_filename):
-        plt.savefig(save_as_filename)
+        current_dir = pathlib.Path(__file__).parent
+        figure_path = current_dir.joinpath("figures")
+        if not os.path.exists(figure_path):
+            os.makedirs(figure_path)
+        figure_path = figure_path.joinpath(save_as_filename + ".png")
+        plt.savefig(figure_path, dpi=150, bbox_inches='tight')
+        plt.close()
 
     @staticmethod
     def memtier_experiment(experiment_definition, histogram=False):
@@ -263,12 +309,16 @@ class ExperimentPlotter:
             response_time_interactive = concatenated_response_time[
                 concatenated_response_time.Type.str.contains('Interactive')]
 
-            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, None)
-            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name, None)
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
 
-            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law', None)
+            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, plot_base + 'mt_throughput')
+            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name,
+                                                         plot_base + 'mt_response_time')
+
+            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law',
+                                                      plot_base + 'mt_throughput-il')
             PlottingFunctions.plot_response_time_by_type(response_time_interactive, exp_name + ' Interactive Law',
-                                                         None)
+                                                         plot_base + 'mt_response-time-il')
 
         hits_get = StatisticsFunctions.get_average_and_std(
             hits_get.groupby(['Num_Clients', 'Worker_Threads', 'Type']), 'Hits')
@@ -307,6 +357,7 @@ class ExperimentPlotter:
         print(exp_name + " GET:")
         print(get_summary)
         print("====================\n")
+        return [set_summary, get_summary]
 
     @staticmethod
     def memtier_statistics_request_family(flattened, subexperiment, r_type='SET', plot=True):
@@ -329,11 +380,16 @@ class ExperimentPlotter:
             response_time_interactive = concatenated_response_time[
                 concatenated_response_time.Type.str.contains('Interactive')]
 
-            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, None)
-            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name, None)
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
 
-            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law', None)
-            PlottingFunctions.plot_response_time_by_type(response_time_interactive, exp_name + ' Interactive Law', None)
+            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, plot_base + 'mt_throughput')
+            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name,
+                                                         plot_base + 'mt_response_time')
+
+            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law',
+                                                      plot_base + 'mt_throughput-il')
+            PlottingFunctions.plot_response_time_by_type(response_time_interactive, exp_name + ' Interactive Law',
+                                                         plot_base + 'mt_response-time-il')
 
         plotted_throughput_family = throughput_family.groupby(['Num_Clients', 'Worker_Threads', 'Type'])
         plotted_response_time_family = response_time_family.groupby(['Num_Clients', 'Worker_Threads', 'Type'])
@@ -352,6 +408,7 @@ class ExperimentPlotter:
         print(exp_name + " " + r_type + ":")
         print(family_summary)
         print("====================\n")
+        return family_summary
 
     @staticmethod
     def memtier_statistics_multiget(flattened, subexperiment, plot=True):
@@ -375,11 +432,13 @@ class ExperimentPlotter:
         concatenated_response_time = pd.concat([average_get_response_time.assign(RequestType='GET')])
 
         if plot:
-            PlottingFunctions.lineplot(concatenated_throughput, exp_name, None, x='Type', y='Request_Throughput',
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
+
+            PlottingFunctions.lineplot(concatenated_throughput, exp_name, plot_base + 'mt_throughput', x='Type', y='Request_Throughput',
                                        xlabel=req_types, ylabel='Throughput (req/s)',
                                        xlim=(None, None), ylim=(0, 4000), xticks=(np.arange(4), [1, 3, 6, 9]))
 
-            PlottingFunctions.lineplot(concatenated_response_time, exp_name, None, x='Type', y='Response_Time',
+            PlottingFunctions.lineplot(concatenated_response_time, exp_name, plot_base + 'mt_response-time', x='Type', y='Response_Time',
                                        xlabel=req_types, ylabel='Response Time (ms)',
                                        xlim=(None, None), ylim=(0, None), xticks=(np.arange(4), [1, 3, 6, 9]))
 
@@ -400,6 +459,7 @@ class ExperimentPlotter:
         print(exp_name + " GET:")
         print(get_summary)
         print("====================\n\n")
+        return get_summary
 
     @staticmethod
     def middleware_statistics_get_set(flattened, subexperiment, plot=True):
@@ -437,7 +497,7 @@ class ExperimentPlotter:
                                                     response_time_get.assign(RequestType='GET')])
             concatenated_queue_waiting_time = pd.concat([queue_waiting_time_set.assign(RequestType='SET'),
                                                          queue_waiting_time_get.assign(RequestType='GET')])
-            concatendated_memcached_communication = pd.concat([memcached_communication_set.assign(RequestType='SET'),
+            concatenated_memcached_communication = pd.concat([memcached_communication_set.assign(RequestType='SET'),
                                                                memcached_communication_get.assign(RequestType='GET')])
             concatenated_queue_size = pd.concat([queue_size_set.assign(RequestType='SET'),
                                                  queue_size_get.assign(RequestType='GET')])
@@ -451,26 +511,29 @@ class ExperimentPlotter:
             response_time_interactive = concatenated_response_time[
                 concatenated_response_time.Type.str.contains('Interactive')]
 
-            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, None)
-            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name, None)
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
 
-            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law', None)
+            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, plot_base + 'mw_throughput')
+            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name,
+                                                         plot_base + 'mw_response_time')
+
+            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law',
+                                                      plot_base + 'mw_throughput-il')
             PlottingFunctions.plot_response_time_by_type(response_time_interactive, exp_name + ' Interactive Law',
-                                                         None)
+                                                         plot_base + 'mw_response-time-il')
 
-            PlottingFunctions.lineplot(concatenated_queue_waiting_time, exp_name, None, x='Num_Clients',
-                                       y='Queue_Waiting_Time', hue='RequestType', style='Worker_Threads',
-                                       xlabel='Number Memtier Clients', ylabel='Queue Waiting Time (ms)',
-                                       huelabel='Request Type', stylelabel='Worker Threads',
-                                       xlim=(0, None), ylim=(0, None), xticks=xticks)
-            PlottingFunctions.lineplot(concatendated_memcached_communication, exp_name, None, x='Num_Clients',
-                                       y='Memcached_Communication',
-                                       hue='RequestType', style='Worker_Threads',
-                                       xlabel='Number Memtier Clients',
+            PlottingFunctions.lineplot(concatenated_queue_waiting_time, exp_name, plot_base + "mw_queue-wait-time",
+                                       x='Num_Clients', y='Queue_Waiting_Time', hue='RequestType',
+                                       style='Worker_Threads', xlabel='Number Memtier Clients',
+                                       ylabel='Queue Waiting Time (ms)', huelabel='Request Type',
+                                       stylelabel='Worker Threads', xlim=(0, None), ylim=(0, None), xticks=xticks)
+            PlottingFunctions.lineplot(concatenated_memcached_communication, exp_name, plot_base + "mw_mc-comm-time",
+                                       x='Num_Clients', y='Memcached_Communication', hue='RequestType',
+                                       style='Worker_Threads', xlabel='Number Memtier Clients',
                                        ylabel='Middleware Communication and Response Handling (ms)',
                                        huelabel='Request Type', stylelabel='Worker Threads',
                                        xlim=(0, None), ylim=(0, None), xticks=xticks)
-            PlottingFunctions.lineplot(concatenated_queue_size, exp_name, None, x='Num_Clients',
+            PlottingFunctions.lineplot(concatenated_queue_size, exp_name, plot_base + "mw_queue-size", x='Num_Clients',
                                        y='Queue_Size', hue='RequestType', style='Worker_Threads',
                                        xlabel='Number Memtier Clients', ylabel='Queue Size',
                                        huelabel='Request Type', stylelabel='Worker Threads',
@@ -533,6 +596,7 @@ class ExperimentPlotter:
         print(exp_name + " GET:")
         print(get_summary)
         print("====================\n")
+        return [set_summary, get_summary]
 
     @staticmethod
     def middleware_statistics_request_family(flattened, subexperiment, r_type='SET', plot=True):
@@ -569,28 +633,30 @@ class ExperimentPlotter:
             response_time_interactive = concatenated_response_time[
                 concatenated_response_time.Type.str.contains('Interactive')]
 
-            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, None)
-            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name, None)
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
 
-            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law', None)
-            PlottingFunctions.plot_response_time_by_type(response_time_interactive, exp_name + ' Interactive Law', None)
-            PlottingFunctions.lineplot(concatenated_queue_waiting_time, exp_name, None, x='Num_Clients',
-                                       y='Queue_Waiting_Time', hue='Worker_Threads',
+            PlottingFunctions.plot_throughput_by_type(throughput_measured, exp_name, plot_base + 'mw_throughput')
+            PlottingFunctions.plot_response_time_by_type(response_time_measured, exp_name,
+                                                         plot_base + 'mw_response_time')
+
+            PlottingFunctions.plot_throughput_by_type(throughput_interactive, exp_name + ' Interactive Law',
+                                                      plot_base + 'mw_throughput-il')
+            PlottingFunctions.plot_response_time_by_type(response_time_interactive, exp_name + ' Interactive Law',
+                                                         plot_base + 'mw_response-time-il')
+
+            PlottingFunctions.lineplot(concatenated_queue_waiting_time, exp_name, plot_base + "mw_queue-wait-time",
+                                       x='Num_Clients', y='Queue_Waiting_Time', hue='Worker_Threads',
                                        xlabel='Number Memtier Clients', ylabel='Queue Waiting Time (ms)',
-                                       huelabel='Worker Threads',
-                                       xlim=(0, None), ylim=(0, None), xticks=xticks)
-            PlottingFunctions.lineplot(concatenated_memcached_communication, exp_name, None, x='Num_Clients',
-                                       y='Memcached_Communication',
-                                       hue='Worker_Threads',
+                                       huelabel='Worker Threads',xlim=(0, None), ylim=(0, None), xticks=xticks)
+            PlottingFunctions.lineplot(concatenated_memcached_communication, exp_name, plot_base + "mw_mc-comm-time",
+                                       x='Num_Clients', y='Memcached_Communication', hue='Worker_Threads',
                                        xlabel='Number Memtier Clients',
-                                       ylabel='Memcached Communication and Packet Handling (ms)',
-                                       huelabel='Worker Threads',
-                                       xlim=(0, None), ylim=(0, None), xticks=xticks)
-            PlottingFunctions.lineplot(concatenated_queue_size, exp_name, None, x='Num_Clients',
-                                       y='Queue_Size', hue='Worker_Threads',
-                                       xlabel='Number Memtier Clients', ylabel='Queue Size',
-                                       huelabel='Worker Threads',
-                                       xlim=(0, None), ylim=(0, None), xticks=xticks)
+                                       ylabel='Middleware Communication and Response Handling (ms)',
+                                       huelabel='Worker Threads', xlim=(0, None), ylim=(0, None), xticks=xticks)
+            PlottingFunctions.lineplot(concatenated_queue_size, exp_name, plot_base + "mw_queue-size", x='Num_Clients',
+                                       y='Queue_Size', hue='Worker_Threads', xlabel='Number Memtier Clients',
+                                       ylabel='Queue Size', huelabel='Worker Threads', xlim=(0, None), ylim=(0, None),
+                                       xticks=xticks)
 
         plotted_throughput_family = throughput_family.groupby(['Num_Clients', 'Worker_Threads', 'Type'])
         plotted_response_time_family = response_time_family.groupby(['Num_Clients', 'Worker_Threads', 'Type'])
@@ -613,12 +679,13 @@ class ExperimentPlotter:
                              memcached_communication_family_plotted, queue_size_family_plotted]
 
         family_summary = reduce(lambda left, right: pd.merge(left, right,
-                                                             on=['Num_Clients', 'Worker_Threads', 'Type']),
+                                                             on=['Num_Clients', 'Worker_Threads', 'Type'], how='outer'),
                                 family_table_list)
 
         print(exp_name + " " + r_type + ":")
         print(family_summary)
         print("====================\n")
+        return family_summary
 
     @staticmethod
     def middleware_statistics_multiget(flattened, subexperiment, plot=True):
@@ -650,25 +717,27 @@ class ExperimentPlotter:
             concatenated_memcached_communication = pd.concat([memcached_communication_set.assign(RequestType='GET')])
             concatenated_queue_size = pd.concat([queue_size_set.assign(RequestType='GET')])
 
-            PlottingFunctions.lineplot(concatenated_throughput, exp_name, None, x='Type', y='Request_Throughput',
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
+
+            PlottingFunctions.lineplot(concatenated_throughput, exp_name, plot_base + "mw_thoughput", x='Type', y='Request_Throughput',
                                        xlabel=req_types, ylabel='Throughput (req/s)',
                                        xlim=(None, None), ylim=(0, 4000), xticks=(np.arange(4), [1, 3, 6, 9]))
 
-            PlottingFunctions.lineplot(concatenated_response_time, exp_name, None, x='Type', y='Response_Time',
+            PlottingFunctions.lineplot(concatenated_response_time, exp_name, plot_base + "mw_response-time", x='Type', y='Response_Time',
                                        xlabel=req_types, ylabel='Response Time (ms)',
                                        xlim=(None, None), ylim=(0, None), xticks=(np.arange(4), [1, 3, 6, 9]))
 
-            PlottingFunctions.lineplot(concatenated_queue_waiting_time, exp_name, None, x='Type',
+            PlottingFunctions.lineplot(concatenated_queue_waiting_time, exp_name, plot_base + "mw_queue-wait-time", x='Type',
                                        y='Queue_Waiting_Time',
                                        xlabel=req_types, ylabel='Queue Waiting Time (ms)',
                                        xlim=(None, None), ylim=(0, None), xticks=(np.arange(4), [1, 3, 6, 9]))
 
-            PlottingFunctions.lineplot(concatenated_memcached_communication, exp_name, None, x='Type',
+            PlottingFunctions.lineplot(concatenated_memcached_communication, exp_name, plot_base + "mw_mc-comm-time", x='Type',
                                        y='Memcached_Communication',
                                        xlabel=req_types, ylabel='Memcached Communication and Packet Handling (ms)',
                                        xlim=(None, None), ylim=(0, None), xticks=(np.arange(4), [1, 3, 6, 9]))
 
-            PlottingFunctions.lineplot(concatenated_queue_size, exp_name, None, x='Type',
+            PlottingFunctions.lineplot(concatenated_queue_size, exp_name, plot_base + "mw_queue-size", x='Type',
                                        y='Queue_Size',
                                        xlabel=req_types, ylabel='Queue Size',
                                        xlim=(None, None), ylim=(0, None), xticks=(np.arange(4), [1, 3, 6, 9]))
@@ -676,7 +745,8 @@ class ExperimentPlotter:
         hits_get = StatisticsFunctions.get_average_and_std(hits_get.groupby(['Type']), 'Hits')
         misses_get = StatisticsFunctions.get_average_and_std(misses_get.groupby(['Type']), 'Misses')
         keysize_get = StatisticsFunctions.get_average_and_std(keysize_get.groupby(['Type']), 'Request_Size')
-        key_throughput_get = StatisticsFunctions.get_average_and_std(key_throughput_get.groupby(['Type']), 'Key_Throughput')
+        key_throughput_get = StatisticsFunctions.get_average_and_std(key_throughput_get.groupby(['Type']),
+                                                                     'Key_Throughput')
 
         plotted_throughput_get = summed_get_throughput.groupby(['Type'])
         plotted_response_time_get = average_get_response_time.groupby(['Type'])
@@ -694,16 +764,18 @@ class ExperimentPlotter:
         queue_size_get_plotted = StatisticsFunctions.get_average_and_std(plotted_queue_size_get, 'Queue_Size')
 
         get_table_list = [throughput_get_plotted, response_time_get_plotted, queue_waiting_time_get_plotted,
-                          memcached_communication_get_plotted, queue_size_get_plotted, misses_get, hits_get, keysize_get, key_throughput_get]
+                          memcached_communication_get_plotted, queue_size_get_plotted, misses_get, hits_get,
+                          keysize_get, key_throughput_get]
 
         get_summary = reduce(lambda left, right: pd.merge(left, right, on=['Type']), get_table_list)
 
         print(exp_name + " GET:")
         print(get_summary)
         print("====================\n\n")
+        return get_summary
 
     @staticmethod
-    def middleware_statistics_MMx(flattened, subexperiment):
+    def middleware_statistics_mmx(flattened, subexperiment):
         exp_name = "Experiment {}.{} - {}".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'],
                                                   'Middleware')
 
@@ -725,6 +797,7 @@ class ExperimentPlotter:
 
         maximum_service_rates = merged_dataframe.iloc[
             merged_dataframe.groupby(['Worker_Threads'])['Request_Throughput'].idxmax().values.ravel()]
+        maximum_service_rates.rename(index=str, columns={'Request_Throughput': 'Maximum_Service_Rate'}, inplace=True)
 
         print(exp_name + " SET:")
         print(merged_dataframe)
@@ -733,6 +806,8 @@ class ExperimentPlotter:
         print(exp_name + " Maximum Service Rates:")
         print(maximum_service_rates)
         print("====================\n")
+
+        return maximum_service_rates
 
     @staticmethod
     def histogram_6keys(flattened, subexperiment, measured_from, plot=True):
@@ -765,7 +840,12 @@ class ExperimentPlotter:
         histogram = pd.DataFrame(occurrence_list)
 
         if plot:
-            PlottingFunctions.plot_histogram(histogram, exp_name, None)
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
+            if measured_from == 'Middleware':
+                plot_base += "mw_"
+            elif measured_from == 'Memtier':
+                plot_base += "mt_"
+            PlottingFunctions.plot_histogram(histogram, exp_name, plot_base + "histogram")
 
     @staticmethod
     def percentiles_multiget(flattened, subexperiment, measured_from, plot=True):
@@ -815,7 +895,12 @@ class ExperimentPlotter:
         percentiles = pd.concat(quantile_data_per_type_and_repetition)
 
         if plot:
-            PlottingFunctions.lineplot(percentiles, exp_name, None, x='Percentile', y='Response_Time',
+            plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
+            if measured_from == 'Middleware':
+                plot_base += "mw_"
+            elif measured_from == 'Memtier':
+                plot_base += "mt_"
+            PlottingFunctions.lineplot(percentiles, exp_name, plot_base + "percentiles", x='Percentile', y='Response_Time',
                                        hue='Request_Type',
                                        xlabel='Percentile', ylabel='Response Time (ms)', huelabel='MultiGET Type',
                                        xlim=(0, 1), ylim=(0, None), xticks=[0.25, 0.5, 0.75, 0.9, 0.99])
@@ -826,22 +911,33 @@ class ExperimentPlotter:
         print("====================\n\n")
 
     @staticmethod
-    def exp_6_pretty_table(exp_list):
+    def exp_6_pretty_table(exp_list, multiplicative_model=False):
         exp_tables = []
         exp_tables_readable = []
         for key, value in exp_list:
             mw_count = len(key['memtier_targets'])
             mc_count = len(key['memcached_servers'])
-            sets = value[0][~value[0].Type.str.contains('Interactive')].groupby(['Repetition', 'Worker_Threads', 'Type'])
-            gets = value[1][~value[1].Type.str.contains('Interactive')].groupby(['Repetition', 'Worker_Threads', 'Type'])
+            if multiplicative_model:
+                value[0]['Request_Throughput'] = value[0]['Request_Throughput'].apply(lambda x: np.log10(x))
+                value[1]['Request_Throughput'] = value[1]['Request_Throughput'].apply(lambda x: np.log10(x))
+                value[0]['Response_Time'] = value[0]['Response_Time'].apply(lambda x: np.log10(x))
+                value[1]['Response_Time'] = value[1]['Response_Time'].apply(lambda x: np.log10(x))
+            sets = value[0][~value[0].Type.str.contains('Interactive')].groupby(['Repetition', 'Worker_Threads',
+                                                                                 'Type'])
+            gets = value[1][~value[1].Type.str.contains('Interactive')].groupby(['Repetition', 'Worker_Threads',
+                                                                                 'Type'])
 
             data_list = [sets, gets]
             throughputs = []
             response_times = []
             list_throughput = [StatisticsFunctions.get_sum(df, 'Request_Throughput') for df in data_list]
-            list_throughput_averages = [StatisticsFunctions.get_average(df.groupby(['Worker_Threads']), 'Request_Throughput') for df in list_throughput]
+            list_throughput_averages = [StatisticsFunctions.get_average(df.groupby(['Worker_Threads']),
+                                                                        'Request_Throughput') for df in list_throughput]
             for run_results, average in zip(list_throughput, list_throughput_averages):
-                run_results['Request_Throughput_Residual'] = run_results.Request_Throughput - run_results.Worker_Threads.map(dict(zip(average.Worker_Threads.values, average.Request_Throughput)))
+                run_results['Request_Throughput_Residual'] = run_results.Request_Throughput -\
+                                                             run_results.Worker_Threads.map(
+                                                                 dict(zip(average.Worker_Threads.values,
+                                                                          average.Request_Throughput)))
                 average.rename(index=str, columns={'Request_Throughput': 'Request_Throughput_Mean'}, inplace=True)
                 throughputs.append(pd.DataFrame.merge(run_results, average, on=['Worker_Threads']))
             list_response_time = [StatisticsFunctions.get_average(df, 'Response_Time') for df in data_list]
@@ -871,8 +967,6 @@ class ExperimentPlotter:
             exp_tables.append(summary)
 
         result = pd.concat(exp_tables)
-        result_print = pd.concat(exp_tables_readable)
-        result = result.sort_values(by=['Type', 'Memcached', 'Middlewares', 'Worker_Threads'])
         
         result_throughput = result[['Type', 'Request_Throughput_Mean', 'Request_Throughput_Residual']]
         result_response_time = result[['Type', 'Response_Time_Mean', 'Response_Time_Residual']]
@@ -882,24 +976,32 @@ class ExperimentPlotter:
         response_time_get = result_response_time[~result_response_time.Type.str.contains('SET')]
         response_time_set = result_response_time[~result_response_time.Type.str.contains('GET')]
 
-
-        PlottingFunctions.resplot(throughput_set, "Experiment 6 - SET", None, x='Request_Throughput_Mean',
+        PlottingFunctions.resplot(throughput_set, "Experiment 6 - SET", '6-0_throughput-set-residual',
+                                  x='Request_Throughput_Mean',
                                   y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
                                   ylabel='Residual')
-        PlottingFunctions.resplot(throughput_get, "Experiment 6 - GET", None, x='Request_Throughput_Mean',
+        PlottingFunctions.resplot(throughput_get, "Experiment 6 - GET", '6-0_throughput-get-residual',
+                                  x='Request_Throughput_Mean',
                                   y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
                                   ylabel='Residual')
-        PlottingFunctions.resplot(response_time_set, "Experiment 6 - SET", None, x='Response_Time_Mean',
+        PlottingFunctions.resplot(response_time_set, "Experiment 6 - SET", '6-0_response-time-set-residual',
+                                  x='Response_Time_Mean',
                                   y='Response_Time_Residual', xlabel='Mean Response Time',
                                   ylabel='Residual')
-        PlottingFunctions.resplot(response_time_get, "Experiment 6 - GET", None, x='Response_Time_Mean',
+        PlottingFunctions.resplot(response_time_get, "Experiment 6 - GET", '6-0_response-time-get-residual',
+                                  x='Response_Time_Mean',
                                   y='Response_Time_Residual', xlabel='Mean Response Time',
                                   ylabel='Residual')
 
-        PlottingFunctions.qqplot(throughput_set, "Experiment 6 - SET Throughput", None, x='Request_Throughput_Residual')
-        PlottingFunctions.qqplot(throughput_get, "Experiment 6 - GET Throughput", None, x='Request_Throughput_Residual')
-        PlottingFunctions.qqplot(response_time_set, "Experiment 6 - SET Response Time", None, x='Response_Time_Residual')
-        PlottingFunctions.qqplot(response_time_get, "Experiment 6 - GET Response Time", None, x='Response_Time_Residual')
+        PlottingFunctions.qqplot(throughput_set, "Experiment 6 - SET Throughput", '6-0_throughput-set-qq', x='Request_Throughput_Residual')
+        PlottingFunctions.qqplot(throughput_get, "Experiment 6 - GET Throughput", '6-0_throughput-get-qq', x='Request_Throughput_Residual')
+        PlottingFunctions.qqplot(response_time_set, "Experiment 6 - SET Response Time", '6-0_response-time-set-qq',
+                                 x='Response_Time_Residual')
+        PlottingFunctions.qqplot(response_time_get, "Experiment 6 - GET Response Time", '6-0_response-time-get-qq',
+                                 x='Response_Time_Residual')
+
+        result_print = pd.concat(exp_tables_readable)
+        result_print = result_print.sort_values(by=['Type', 'Memcached', 'Middlewares', 'Worker_Threads'])
 
         print("2K Analysis Table:")
         print(result_print)
@@ -915,94 +1017,114 @@ class ExperimentPlotter:
         ExperimentPlotter.middleware_statistics_request_family(data[0], ExperimentDefinitions.subexpriment_00())
 
     @staticmethod
-    def experiment_2():
+    def experiment_2(to_plot):
         data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_21())
-        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_21(), 'Memtier')
+        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_21(), plot=to_plot)
 
         data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_22())
-        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_22(), 'Memtier')
+        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_22(), plot=to_plot)
 
     @staticmethod
-    def experiment_3():
-        #data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_31())
-        #ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31())
+    def experiment_3(to_plot):
+        data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_31())
+        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31(), plot=to_plot)
 
-        #data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_31())
-        #ExperimentPlotter.middleware_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31())
+        data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_31())
+        ExperimentPlotter.middleware_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_31(), plot=to_plot)
 
         data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_32())
-        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_32())
+        ExperimentPlotter.memtier_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_32(), plot=to_plot)
 
         data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_32())
-        ExperimentPlotter.middleware_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_32())
+        ExperimentPlotter.middleware_statistics_get_set(data[0], ExperimentDefinitions.subexpriment_32(), plot=to_plot)
 
     @staticmethod
-    def experiment_4():
+    def experiment_4(to_plot):
         data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_40())
-        ExperimentPlotter.memtier_statistics_request_family(data[0], ExperimentDefinitions.subexpriment_40())
+        ExperimentPlotter.memtier_statistics_request_family(data[0], ExperimentDefinitions.subexpriment_40(),
+                                                            plot=to_plot)
 
         data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_40())
-        ExperimentPlotter.middleware_statistics_request_family(data[0], ExperimentDefinitions.subexpriment_40())
+        ExperimentPlotter.middleware_statistics_request_family(data[0], ExperimentDefinitions.subexpriment_40(),
+                                                               plot=to_plot)
 
     @staticmethod
-    def experiment_5():
+    def experiment_5(to_plot):
         data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_51(), histogram=True)
-        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_51(), 'Memtier')
-        ExperimentPlotter.percentiles_multiget(data[1], ExperimentDefinitions.subexpriment_51(), 'Memtier')
-        ExperimentPlotter.memtier_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_51())
+        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_51(), 'Memtier', plot=to_plot)
+        ExperimentPlotter.percentiles_multiget(data[1], ExperimentDefinitions.subexpriment_51(), 'Memtier',
+                                               plot=to_plot)
+        ExperimentPlotter.memtier_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_51(), plot=to_plot)
 
         data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_51(), histogram=True)
-        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_51(), 'Middleware')
-        ExperimentPlotter.middleware_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_51())
+        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_51(), 'Middleware',
+                                          plot=to_plot)
+        ExperimentPlotter.middleware_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_51(),
+                                                         plot=to_plot)
 
         data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_52(), histogram=True)
-        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_52(), 'Memtier')
-        ExperimentPlotter.percentiles_multiget(data[1], ExperimentDefinitions.subexpriment_52(), 'Memtier')
-        ExperimentPlotter.memtier_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_52())
+        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_52(), 'Memtier', plot=to_plot)
+        ExperimentPlotter.percentiles_multiget(data[1], ExperimentDefinitions.subexpriment_52(), 'Memtier',
+                                               plot=to_plot)
+        ExperimentPlotter.memtier_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_52(), plot=to_plot)
 
         data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_52(), histogram=True)
-        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_52(), 'Middleware')
-        ExperimentPlotter.middleware_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_52())
+        ExperimentPlotter.histogram_6keys(data[1], ExperimentDefinitions.subexpriment_52(), 'Middleware',
+                                          plot=to_plot)
+        ExperimentPlotter.middleware_statistics_multiget(data[0], ExperimentDefinitions.subexpriment_52(),
+                                                         plot=to_plot)
 
     @staticmethod
-    def experiment_6():
+    def experiment_6(to_plot):
         mappings = []
         exp_list = [ExperimentDefinitions.subexpriment_60_1_1(), ExperimentDefinitions.subexpriment_60_2_1(),
                     ExperimentDefinitions.subexpriment_60_1_3(), ExperimentDefinitions.subexpriment_60_2_3()]
         for exp in exp_list:
             mappings.append([exp, ExperimentPlotter.memtier_experiment(exp)[0]])
-        ExperimentPlotter.exp_6_pretty_table(mappings)
+        ExperimentPlotter.exp_6_pretty_table(mappings, plot=to_plot)
 
     @staticmethod
-    def experiment_7():
+    def experiment_7(to_plot):
         data = ExperimentPlotter.middleware_experiment(ExperimentDefinitions.subexpriment_40())
-        ExperimentPlotter.middleware_statistics_MMx(data[0], ExperimentDefinitions.subexpriment_40())
-        # Do here MM1
-        mmx_muh = [8739.2, 10123.283333, 11578.116667, 12421.866667]
-        mm1_lamb = []
-        print(StatisticsFunctions.mm1(2880.883333, mmx_muh[0]))
-        # Also do MMm
-        mmm_muh = []
-        mmm_lamb = []
-        mmm_servers = [8 * 2, 16 * 2, 32 * 2, 64 * 2]
-        print(StatisticsFunctions.mmm(2880.883333, mmx_muh[0], 16))
-        # data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_31())
-        # ExperimentPlotter.middleware_statistics_network_of_queues(data[0], ExperimentDefinitions.subexpriment_31())
-        # data = ExperimentPlotter.memtier_experiment(ExperimentDefinitions.subexpriment_32())
-        # ExperimentPlotter.middleware_statistics_network_of_queues(data[0], ExperimentDefinitions.subexpriment_32())
+        maximum_service_rate_df = ExperimentPlotter.middleware_statistics_mmx(data[0],
+                                                                              ExperimentDefinitions.subexpriment_40())
+        muh_results = maximum_service_rate_df[['Worker_Threads', 'Maximum_Service_Rate']]
+        lambs = ExperimentPlotter.middleware_statistics_request_family(data[0], ExperimentDefinitions.subexpriment_40(),
+                                                                       plot=False)
+        analysis_table = pd.DataFrame.merge(lambs, muh_results, on=['Worker_Threads'])
+        mm1_results = StatisticsFunctions.mm1(analysis_table, plot=to_plot)
+        mmm_results = StatisticsFunctions.mmm(analysis_table, plot=to_plot)
+        mm1_pretty = mm1_results
+        mmm_pretty = mmm_results
+        mm1_pretty = mm1_pretty.pivot_table(index=['Num_Clients', 'Worker_Threads', 'Maximum_Service_Rate'],
+                                            values=['Arrival_Rate', 'Traffic_Intensity', 'Mean_Number_Jobs_System',
+                                                    'Measured_Response_Time', 'Estimated_Response_Time',
+                                                    'Measured_Queue_Waiting_Time', 'Estimated_Queue_Waiting_Time',
+                                                    'Measured_Queue_Size', 'Estimated_Queue_Size'])
+        mmm_pretty = mmm_pretty.pivot_table(index=['Num_Clients', 'Worker_Threads', 'Maximum_Service_Rate'],
+                                            values=['Arrival_Rate', 'Traffic_Intensity', 'Mean_Number_Jobs_System',
+                                                    'Measured_Response_Time', 'Estimated_Response_Time',
+                                                    'Measured_Queue_Waiting_Time', 'Estimated_Queue_Waiting_Time',
+                                                    'Measured_Queue_Size', 'Estimated_Queue_Size',
+                                                    'Probability_Zero_Jobs_System', 'Probability_Queueing',
+                                                    'Mean_Average_Utilization_Each_Server'])
+        print(mm1_pretty.round(decimals=2))
+        print(mmm_pretty.round(decimals=2))
 
 
 if __name__ == '__main__':
-    sns.set(style="ticks", color_codes=True, context="paper")
+    sns.set(style="ticks", color_codes=True)#, context="paper")
     pd.set_option("display.width", 1920)
     pd.set_option("display.max_rows", 100)
     pd.set_option("display.max_columns", 64)
     pd.set_option('display.max_colwidth', 1920)
-    plt.rcParams["figure.figsize"] = [16, 9]
+    # plt.rcParams["figure.figsize"] = [16, 9]
 
-    # ExperimentPlotter.experiment_2()
-    # ExperimentPlotter.experiment_3()
-    # ExperimentPlotter.experiment_4()
-    # ExperimentPlotter.experiment_5()
-    ExperimentPlotter.experiment_6()
-    # ExperimentPlotter.experiment_7()
+    figures_wanted = False
+
+    # ExperimentPlotter.experiment_2(figures_wanted)
+    # ExperimentPlotter.experiment_3(figures_wanted)
+    # ExperimentPlotter.experiment_4(figures_wanted)
+    ExperimentPlotter.experiment_5(figures_wanted)
+    # ExperimentPlotter.experiment_6(figures_wanted)
+    # ExperimentPlotter.experiment_7(figures_wanted)
