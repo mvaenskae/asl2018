@@ -1,5 +1,17 @@
 \section{Baseline without Middleware (75 pts)\label{sec:2}}
 
+    This experiment serves to establish a baseline of the system without the involvement of a middleware. The
+    experimental parameters for experiments run are documented in table \ref{tab:20_setup}.
+
+    Two configurations are tested, one \srv{} with three \cli{}s and two \srv{}s with one \cli{}. The goal is to infer
+    system limits and find out if even without the involvement of a middleware limits below the theoretical maximum are
+    reached.
+
+    As each memtier instance can only connect to a single target (i.e. \srv{}) to keep the behaviour consistent between
+    experiments each \cli{} connects, to keep both cores saturated, either with two threads for a single virtual target
+    (as is the case in experiment \ref{subsec:2_one-server}) or one thread for a single target (experiment
+    \ref{subsec:2_two-servers} \textemdash here two physical targets exist).
+
     \begin{table}
         \scriptsize{
             \begin{tabular}{|l|c|}
@@ -20,10 +32,6 @@
     \end{table}
 
     \subsection{One Server\label{subsec:2_one-server}}
-
-        % This experiment includes three instances of \cli{} and one instance of \srv{}. \mw{} instances are not used.
-        % Each \cli{} starts a single instance of memtier with two threads connecting with a variable amount of
-        % virtual clients to the single memcached instance. The virtual client amount can be inferred from the graphs.
 
         \begin{figure*}
             \vspace*{-.5\baselineskip}
@@ -59,23 +67,18 @@
             have slower response times.
 
             The memcached server behaves differently for SET requests. From a visual observation it seems to only
-            saturate at 192 clients and performance degrades thereafter. Response times scale for all points
-            linearly and slowly; the system behaves well within parameters and can still handle more clients. The
-            throughput is trending down though for very many clients and as such clients can expect slower response
-            times from the system which reflect in smaller request throughput. It is noteworthy to mention that
-            for SET the theoretical limit has not been reached.
+            saturate at 192 clients with a throughput of roughly 16000 requests\textemdash performance degrades
+            thereafter. Response times scale for all points linearly and slowly; the system behaves well within
+            parameters and can still handle more clients. The throughput is trending down though for very many clients
+            and as such clients can expect slower response times from the system which reflect in smaller request
+            throughput. It is noteworthy to mention that for SET the theoretical limit has not been reached.
 
             The interactive law holds as seen in figures \ref{fig:21_mt_tp_il} and \ref{fig:21_mt_rt_il}.
 
             We conclude therefore that the bottleneck for memcached machines is the upload of data. The next
             experiment will clarify the bottleneck for memtier machines.
 
-
     \subsection{Two Servers\label{subsec:2_two-servers}}
-
-        % This experiment includes one instance of \cli{} and two instances of \srv{}. The \cli{} starts two instance
-        % of memtier, each running with a single thread. Each thread connects using a variable amount of virtual
-        % clients to one memcached instance.
 
         \begin{figure*}
             \vspace*{-.5\baselineskip}
@@ -117,7 +120,8 @@
             Memtier machines have a maximum throughput of about 5800 requests per second in these experiments. Of
             note is that the throughput doesn't compare to the previous experiment linearly but can be explained by
             a variation due to network latencies and also multiple machines resulting in overlaps of commands to
-            memcached whereby some waiting is required before the request is processed.
+            memcached whereby some waiting is required for near-simultaneous requests as each memcached instance is run
+            single-threaded.
 
     \subsection{Summary\label{subsec:23_summary}}
 
@@ -148,14 +152,18 @@
             }
         \end{table}
 
-        The behaviour of slower reads than writes may be peculiar at first but verifying the machine configuration
-        and doing throughput tests with iperf verifies the behaviours observed. In table \ref{tab:iperf_results} the
-        respective upload bandwidths between different machine types is listed next to a summary of the maximum
-        theoretical amount of request types each machine can send/receive (when applicable).
+        The difference of how GETs and SETs are bottlenecked has been described in subsections \ref{subsec:2_one-server}
+        and \ref{subsec:2_two-servers} and expected at this point. Table \ref{tab:iperf_results} summarises the
+        theoretical limits.
 
-        For the case of GET with one memcached instance this limit matches with the observed result.  For two
+        % The behaviour of slower reads than writes may be peculiar at first but verifying the machine configuration
+        % and doing throughput tests with iperf verifies the behaviours observed. In table \ref{tab:iperf_results} the
+        % respective upload bandwidths between different machine types is listed next to a summary of the maximum
+        % theoretical amount of request types each machine can send/receive (when applicable).
+
+        For the case of GET with one memcached instance this limit matches with the observed result. For two
         memcached instances with a single memtier instance this limit is twice as high as two instances are queried.
-        The experiment's respective SET behaviour can be explained by the upload limit of the respective machine (cf.
+        That experiment's respective SET behaviour can be explained by the upload limit of the respective machine (cf.
         table \ref{tab:iperf_results}) and not by memcached. This claim is strengthened by the fact that a single
         instance can handle up to 16334 writes in our experiments.
 
@@ -168,8 +176,8 @@
         with the unavailability of controlling the deployment locations of VMs this task becomes a game of trial and
         error.
 
-        \warn{Continue this maybe?}
+        % \warn{Continue this maybe?}
 
-        The interactive law plots for all four graph align well with the measured numbers and as such it can be
-        deduced the thinking time is very close to 0 and all components introducing long response times are
-        observable within this configuration.
+        The interactive law graphs align in all cases with the measured numbers and as such it can be deduced the
+        thinking time is very close to 0 and all components introducing long response times are observable within this
+        configuration.
