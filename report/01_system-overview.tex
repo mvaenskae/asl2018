@@ -1,0 +1,101 @@
+\section{System Overview (75 pts)\label{sec:1}}
+
+    The middleware is logically split up into 4 parts which interact with respective data sources.
+
+    \begin{enumerate}
+        \item Main Thread
+        \item Worker Threads
+        \item Packet Parser
+        \item Logging Instrumentation
+    \end {enumerate}
+
+    TODO: Include a CFG of messages of who supplies what messages to whom.
+
+    TODO: Show a visualization of how the net-thread handles control.
+
+    TODO: Show a visualization of how a worker handles a full round of communication.
+
+    The \textbf{Main Thread} facilitates the startup of opening a \tw{ServerSocketChannel} which listens on the given
+    \emph{IP:Port} pair and generating a shared queue of memtier-based requests before instantiating and scheduling all
+    \tw{Worker Threads}. Next it will loop until a \emph{SIGTERM} and listen on the \tw{ServerSocketChannel} for incoming
+    requests. Any new connection will get a \tw{SelectionKey} which the Main Threads only reads on and additionally
+    instantiates a stateful \textbf{Packet Parser}.
+
+    \warn{Continue here\dots}
+
+    Describe the implementation of your system and highlight design decisions relevant for the experiments. Explain how messages are parsed and how statistics are gathered in a multi-threaded setting. Provide figures containing all the threads and queues in your system (including the network and the memcached servers). Include illustrations that show how requests of different types are handled (e.g., components involved in processing the request and method calls). Please include all details necessary to understand artifacts and effects in your experiments that arise from your implementation choices.
+
+    \subsection{Experimental Configurations\label{subsec:1_exp-conf}}
+        In this report the following notations exist: \cli, \mw{} and \srv{} which refer
+        to instances of virtual machines on Microsoft Azure of the following configurations.
+
+        Basic A1 (1vcpu, 1.75GB RAM) are used for \srv{} actors, Basic A2 (2vcpu, 3.5GB RAM) for \cli{}
+        actors and lastly Basic A4 (8vcpu, 14GB RAM) for \mw{} actors. All instances are running Ubuntu
+        16.04.5 LTS. Instance specific configurations for the experiments are the following:
+
+        \begin{table}
+            \footnotesize{
+            \centering
+            \captionsetup{justification=centering}
+            \ra{1.1}
+            \begin{tabular}{@{}rlllll@{}}
+                    \toprule
+                    \textbf{Machine Type} & \textbf{Throughput [Mbit/s]} & \textbf{SET request} &
+                    \textbf{SET reply} & \textbf{GET request} & \textbf{GET reply} \\
+                    \midrule
+                    \cli & 201 & 6077.65     & \textemdash   & $1.32 * 10^6$ & \textemdash \\
+                    \mw  & 802 & 24267.73    & $2.25 * 10^7$ & $5.27 * 10^6$ & 24261.85 \\
+                    \srv & 101 & \textemdash & $1.57 * 10^6$ & \textemdash   & 3055.42 \\
+                    \bottomrule
+            \end{tabular}
+            \caption{Derived maximal requests per second for given upload speeds. Maximum request numbers per
+                     seconds are based on sizes of 4131B, 8B, 19B and 4132B for SET requests, SET replies, GET
+                     requests and GET replies respectively. These calculations exclude any network
+                     overhead.\label{tab:iperf_results}}
+            % \vspace*{-1.5\baselineskip}
+            }
+        \end{table}
+
+        \begin{enumerate}
+            \item \cli{}s run memtier 1.2.15 %\footnote{\url{https://github.com/RedisLabs/memtier_benchmark}} 1.2.15
+                  to generate load on the system.
+                  The memtier configuration is the most variable over the run of experiments. As a basic building
+                  block the following command line is used for non-multiget request:
+                  \tw{memtier -\/-protocol=memcache\_text -\/-expiry-range=259200-259201
+                      -\/-key-maximum=10000 -\/-data-size=4096 \newline
+                      -\/-clients=\$VIRTUAL\_CLIENTS -\/-threads=\$THREADS
+                      -\/-test-time=\$RUNTIME \newline -\/-server=\$REMOTE
+                      -\/-port=\$PORT -\/-ratio=\$SET\_RATIO:\$GET\_RATIO}
+
+                  For multiget requests the \tw{-\/-ratio} parameter reads in the size of the requested multiget
+                  size and also adds the argument \tw{-\/-multi-key-get=\$MULTIGET\_COUNT}. These variables are set
+                  according to experimental paramters.
+
+              \item \mw{}s use OpenJDK 8 to run the middleware software.
+                  The middleware accepts as input parameters the number of threads, whether sharding is to be used
+                  for MultiGET requests and the memcached instances to connect to. The experiments describe the
+                  respective invocations of the middleware. As a basic building block the following command line is
+                  used:
+                  \tw{java -jar \$JAR\_PATH -l \$LISTEN\_IP -p \$LISTEN\_PORT -t \$WORKER\_THREADS -s \$IS\_SHARDED
+                      -m \$SERVER\_PORT\_PAIR[*]}
+
+                   The last parameter is the list of memcached server IPs with ports to connect to.
+
+               \item \srv{}s run memcached 1.4.25 to reply to requests sent by memtier.
+                  The memcached configuration was configured to listen to listen on any incoming requests with a
+                  single thread (\tw{-l 0.0.0.0 -t 1}) and started as a system service.
+
+            \item All machines further use dstat to log resource usage in general next to pings between interacting
+                  machines. Additionally iperf statistics were generated between each client type to show network
+                  limits for upload and download speeds. A tabularized summary can be found on Table
+                  \ref{tab:iperf_results}.
+        \end{enumerate}
+
+        The key size for the experiments has been fixed to 4096B, the maximal key index to 10000 and their lifetime
+        set to 259200 seconds (\textrightarrow{} 3 days) to prevent misses. Before experiments were conducted
+        each \srv{}'s memcached instance was populated with dummy values.
+
+        Experimental results were gathered for sets of runs. Experimental data was gathered for experiment 2 in a
+        single run, for experiment 3 in a single run and experiments 4\textendash6 were gathered in one single run
+        together. Each configuration was tested for 80 seconds with a stable window of 60s being cut from the logs
+        after 10 seconds have elapsed. Additionally each configuration was repeated three times.

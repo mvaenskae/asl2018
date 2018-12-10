@@ -1,0 +1,130 @@
+\section{Baseline with Middleware (90 pts)\label{sec:3}}
+
+    In this set of experiments, you will have to use three load generator VMs and 1 memcached server, measuring how the throughput of the system changes when increasing the number of clients. Scaling virtual clients inside memtier has to be done as explained in the previous sections. Plot both throughput and response time as measured on the middleware.
+
+    \begin{table}
+        \scriptsize{
+            \begin{tabular}{|l|c|}
+                \hline Number of servers                & 1 \\
+                \hline Number of client machines        & 3 \\
+                \hline Instances of memtier per machine & 1 (3.1) / 2 (3.2) \\
+                \hline Threads per memtier instance     & 2 (3.1) / 1 (3.2) \\
+                \hline Virtual clients per thread       & [1, 2, 4, 8, 16, 32, 48] \\
+                \hline Workload                         & Write-Only and Read-Only \\
+                \hline Multi-Get behavior               & N/A \\
+                \hline Multi-Get size                   & N/A \\
+                \hline Number of middlewares            & 1 (3.1) / 2 (3.2) \\
+                \hline Worker threads per middleware    & [8, 16, 32, 64]  \\
+                \hline
+            \end{tabular}
+        }
+            \caption{Experimental parameters for experiments 3.1 and 3.2.\label{tab:30_setup}}
+    \end{table}
+
+    \subsection{One Middleware\label{subsec:3_one-middleware}}
+
+    % \begin{figure*}
+    %     \vspace*{-.5\baselineskip}
+    %         \centering
+    %     \begin{minipage}[t!]{.724\textwidth}
+    %     \begin{subfigure}[t!]{0.5\textwidth}
+    %         \centering
+    %         \includegraphics[width=\textwidth]{img/resnet18_all_loss}
+    %         \caption{ResNet18, cross-entropy loss.\label{fig:resnet_loss}}
+    %         \includegraphics[width=\textwidth]{img/segnet_all_loss}
+    %         \caption{SegNet, cross-entropy loss.\label{fig:segnet_loss}}
+    %     \end{subfigure}
+    %     \begin{subfigure}[t!]{0.5\textwidth}
+    %         \centering
+    %         \includegraphics[width=\textwidth]{img/resnet18_all_acc}
+    %         \caption{ResNet18, accuracy.\label{fig:resnet_accuracy}}
+    %         \includegraphics[width=\textwidth]{img/rednet50_all_loss}
+    %         \caption{RedNet50, cross-entropy loss.\label{fig:rednet50_loss}}
+    %     \end{subfigure}
+    %     \caption{Training metrics}
+    %     \label{fig:training_metrics}
+    %     \end{minipage}
+    %     \enspace
+    %         \begin{minipage}[t!]{.195\textwidth}
+    %     \begin{subfigure}[t!]{\textwidth}
+    %         \centering
+    %         \vspace*{.3\baselineskip}
+    %         \includegraphics[width=\textwidth]{img/perfect}
+    %         \vspace*{-.5\baselineskip}
+    %         \caption{\!High accuracy.\label{fig:highacc_prediction}}
+    %         \vspace*{1.2\baselineskip}
+    %         \includegraphics[width=\textwidth]{img/ok}
+    %         \vspace*{-.5\baselineskip}
+    %         \caption{Low accuracy.\label{fig:lowacc_prediction}}
+    %     \end{subfigure}
+    %     \caption{ResNet18 predictions}
+    %     \label{fig:predictions}
+    %     \end{minipage}
+    %     \vspace*{-\baselineskip}
+    % \end{figure*}
+
+
+Connect three load generator machines (one instance of memtier with CT=2) to a single middleware and use 1 memcached server. Run a read-only and a write-only workload with increasing number of clients (between 2 and 64) and measure response time \emph{both at the client and at the middleware}, and plot the throughput and response time measured in the middleware.
+
+Repeat this experiment for different number of worker threads inside the middleware: 8, 16, 32, 64.
+
+        \subsubsection{Explanation\label{subsubsec:3_one-middleware_summary}}
+
+        Provide a detailed analysis of the results (e.g., bottleneck analysis, component utilizations, average queue lengths, system saturation). Add any additional figures and experiments that help you illustrate your point and support your claims.
+
+    \subsection{Two Middlewares\label{subsec:3_two-middlewares}}
+
+    Connect three load generator machines (two instances of memtier with CT=1) to two middlewares and use 1 memcached server. Run a read-only and a write-only workload with increasing number of clients (between 2 and 64) and measure response time \emph{both at the client and at the middleware}, and plot the throughput and response time as measured in the middleware.
+
+    Repeat this experiment for different number of worker threads inside the middleware: 8, 16, 32, 64.
+
+        \subsubsection{Explanation\label{subsubsec:3_two-middlewares_summary}}
+
+        Provide a detailed analysis of the results (e.g., bottleneck analysis, component utilizations, average queue lengths, system saturation). Add any additional figures and experiments that help you illustrate your point and support your claims.
+
+    \subsection{Summary\label{subsec;3_summary}}
+
+    Based on the experiments above, fill out the following table. For both of them use the numbers from a single experiment to fill out all lines. Miss rate represents the percentage of GET requests that return no data. Time in the queue refers to the time spent in the queue between the net-thread and the worker threads.
+
+    Saturation points for GET and SET need to be evaluated on different criteria. As for GET requests it has been
+    deduced in the previous chapter that the saturation point hits from the very start due to bandwidth limitations by
+    the memcached machines we can apply the same argument here and choose the smallest amount of worker threads
+    respectively (as adding more results in no gain).
+
+    For SET we must include the instrumentation of the middleware for a more precise evaluation of maximum throughputs
+    as more data of the acting system becomes available. Possible evaluation criteria next to observing the throughput
+    and response times are the response times of memcached (to the middleware), the queue waiting time and also the
+    queue size.  As mentioned prior the flattening response times of memcached indicate a point of saturation of virtual
+    clients which are served by the middleware. Adding more clients will result in overall slower response times as the
+    queue grows. This trend reflects for the queue size as well. Upon a flattening response time by memcached the queue
+    begins to grow steeper. This is the point of the middleware truly slowing down the system. These are therefore
+    points of interest to compare for throughput and latency of the system. In case of non-existence a fair trade-off
+    between throughput and latency is performed with the lower amount of worker threads taking precedence.
+
+    \begin{table}
+        \begin{tabular}{|l|p{2cm}|p{2cm}|p{2cm}|p{2cm}|}
+            \hline                                & Throughput & Response time & Average time in queue & Miss rate \\
+            \hline Reads: Measured on middleware  &            &               &                       & \\
+            \hline Reads: Measured on clients     &            &               & n/a                   & \\
+            \hline Writes: Measured on middleware &            &               &                       & n/a       \\
+            \hline Writes: Measured on clients    &            &               & n/a                   & n/a       \\
+            \hline 
+        \end{tabular}
+        \caption{Evaluation of maximum throughputs of 3:1:1 (Client:Middleware:Server). In square brackets the standard
+                 deviation is given, numbers are rounded to two significant figures.\label{tab:31_throughput}}
+    \end{table}
+
+    \begin{table}
+        \begin{tabular}{|l|p{2cm}|p{2cm}|p{2cm}|p{2cm}|}
+            \hline                                & Throughput & Response time & Average time in queue & Miss rate \\ 
+            \hline Reads: Measured on middleware  &            &               &                       &           \\ 
+            \hline Reads: Measured on clients     &            &               & n/a                   &           \\ 
+            \hline Writes: Measured on middleware &            &               &                       & n/a       \\ 
+            \hline Writes: Measured on clients    &            &               & n/a                   & n/a       \\ 
+            \hline 
+        \end{tabular}
+        \caption{Evaluation of maximum throughputs of 3:2:1 (Client:Middleware:Server). In square brackets the standard
+                 deviation is given, numbers are rounded to two significant figures.\label{tab:32_throughput}}
+    \end{table}
+
+    Based on the data provided in these tables, write at least two paragraphs summarizing your findings about the performance of the middleware in the baseline experiments.

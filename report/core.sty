@@ -1,0 +1,406 @@
+\NeedsTeXFormat{LaTeX2e}     % Not really necessary
+
+\ProvidesPackage{core}
+
+% Basic input encoding
+% \usepackage[utf8]{inputenc} % Not needed with utf8 input engines
+\usepackage[T1]{fontenc}
+
+% Document layouting
+\usepackage[compact,pagestyles,extramarks]{titlesec} % Advanced pagestyles
+\usepackage{parskip}
+\usepackage{setspace}
+% \usepackage{float} % Manage floats
+\usepackage{multicol} % Advanced column for each page
+\usepackage{multirow} % Advanved rows for each page
+\usepackage{enumitem} % Control topsep and leftmargin for lists
+\usepackage{array}
+\usepackage{listings}
+\usepackage{lstautogobble} % Fix spacing issues with listings and TeX
+\usepackage{stackengine} % Used for drawing the graphic in \warn
+\usepackage{scalerel} % Used for scaling the graphic in \warn
+%\sepackage[most]{tcolorbox} % Another way of drawing textboxes
+\usepackage{booktabs} % Beautiful tables
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+% Colour management
+\usepackage[x11names,svgnames,hyperref,showerrors]{xcolor} % General colour management
+\usepackage{xcolor-material} % Material Design and Google colours
+% \usepackage{colortbl}
+
+% References
+\usepackage[pdfborder={0 0 0}]{hyperref} % Smart framework to reference labels
+%\usepackage[ocgcolorlinks]{ocgx2} % Link colouring on electric, black on print
+\usepackage{nameref} % Better references used by hyperref implicitly - We need it though explicitly called for GetTitleStringSetup
+\usepackage{url}
+\usepackage{hypcap}
+%\usepackage[pdftex,dvipsnames,usenames]{color} % for background color
+\usepackage{graphicx} % import graphics/images
+\usepackage[font=scriptsize,format=plain,labelfont=bf,justification=justified,singlelinecheck=false,skip=0mm,labelsep=endash]{caption} % manage captions of figures
+%\usepackage[font=scriptsize,format=plain,labelfont=bf,textfont=it,justification=justified,singlelinecheck=false,skip=0mm,labelsep=endash]{caption} % manage captions of figures
+\usepackage{subcaption} % Captions for subfigures
+\usepackage{floatrow} % Advanced caption alignment
+
+
+% Scientific
+%% Units
+\usepackage{textcomp} % ???
+\usepackage[binary-units=true]{siunitx}
+%% Mathematics
+\usepackage{mathtools}  % amsmath with extensions
+\usepackage{amsfonts}  % (otherwise \mathbb does nothing)
+%% Algorithms
+\usepackage{algpseudocode}
+\usepackage{algorithm2e}
+
+
+% Internals
+\usepackage{etoolbox} % Manipulate commands by pre/appending to them and patching them
+\usepackage{xparse} % New way of defining document-wide commands with more flexibility
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Document layout & spacings %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Spacings in the document
+% \setlength{\columnsep}{1.5\baselineskip}
+% \titlespacing{\section}{0pt}{-2.25ex plus 0.0ex minus 0.0ex}{0ex plus 0.5ex}
+% \titlespacing{\subsection}{0pt}{2ex plus 0.5ex minus 0.5ex}{0ex plus 0.5ex}
+% \titlespacing{\subsubsection}{0pt}{2ex plus 0.5ex minus 0.5ex}{0ex plus 0.5ex}
+% \titlespacing{\subsubsubsection}{0pt}{2ex plus 0.5ex minus 0.5ex}{0ex plus 0.5ex}
+% \setlength{\parskip}{1mm}
+% \setlength{\parsep}{0pt}
+
+% Penalties for widows/orphans (lines at top/bottom of page ending/starting)
+\widowpenalty = 500 % default: 150
+\clubpenalty = 500 % default: 150
+
+% Hyphenation penalties and settings
+\hyphenpenalty = 1000
+\tolerance = 2000
+%\emergencystretch=10pt
+\lefthyphenmin = 4
+\righthyphenmin = 4
+
+% Start a new odd page
+\newcommand{\cleartooddpage}{
+    \clearpage
+    \ifodd
+        \value{page}
+    \else
+        \null
+        \clearpage
+    \fi
+    %\setcounter{page}{1}
+}
+
+\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+
+%%%%%%%%%%%%
+% SI Units %
+%%%%%%%%%%%%
+\DeclareSIUnit{\mybit}{bit}
+\DeclareSIUnit{\mybyte}{Byte}
+\DeclareSIUnit{\bits}{{\mybit}s}
+\DeclareSIUnit{\bytes}{{\mybyte}s}
+\DeclareSIUnit{\bps}{bps}
+\DeclareSIUnit{\Bps}{Bps}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+% Counter manipulation %
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Allow only section numbering
+% \setcounter{secnumdepth}{1}
+
+
+%%%%%%%%%%%%%%%%%%%
+% Custom sections %
+%%%%%%%%%%%%%%%%%%%
+
+\makeatletter
+\def\refaddtocounter#1#2{
+        \addtocounter{#1}{#2}
+        \protected@edef\@currentlabel{\csname p@#1\endcsname\csname the#1\endcsname }
+}
+
+% Section that is not visible but still behaves like a section, may have a relative offset
+\DeclareDocumentCommand{\sectionunlisted}{ m O{1} }{
+        \refaddtocounter{section}{#2}
+        \protected@edef \@currentlabel {\csname p@section\endcsname \csname thesection\endcsname}
+        \NR@gettitle{#1}
+        \sectionmark{#1} % Add section mark (header)
+        \addcontentsline{toc}{section}{\protect\numberline{\thesection}#1} % Add section to ToC
+}
+
+% Emit a new section with a relative offset section number
+\DeclareDocumentCommand{\sectionrelnum}{ m O{-1}} {
+        \refaddtocounter{section}{#2} % Increment section counter by #1
+        \section{#1} % Print the section
+        \addcontentsline{toc}{section}{\protect\numberline{\thesection}#1}% Add section to ToC
+}
+
+% Emit a hidden section that is not listed in the ToC but still sets the relative offset
+\DeclareDocumentCommand{\sectionhidden}{ m O{1} }{
+        \refaddtocounter{section}{#2}
+        \protected@edef \@currentlabel {\csname p@section\endcsname \csname thesection\endcsname}
+        \NR@gettitle{#1}
+        \sectionmark{#1} % Add section mark (header)
+}
+
+% Subsection that is not visible but still behaves like a subsection, may have a relative offset
+\DeclareDocumentCommand{\subsectionunlisted}{ m O{1} }{
+        \refaddtocounter{subsection}{#2}
+        \protected@edef \@currentlabel {\csname p@subsection\endcsname \csname thesubsection\endcsname}
+        \NR@gettitle{#1}
+        \subsectionmark{#1} % Add subsection mark (header)
+        \addcontentsline{toc}{subsection}{\protect\numberline{\thesubsection}#1} % Add subsection to ToC
+}
+
+% Emit a new subsection with a relative offset subsection number
+\DeclareDocumentCommand{\subsectionrelnum}{ m O{-1} }{
+        \refaddtocounter{subsection}{#2} % Increment section counter by #2
+        \subsection{#1} % Print the subsection
+        \addcontentsline{toc}{subsection}{\protect\numberline{\thesubsection}#1}% Add subsection to ToC
+}
+
+% Emit a hidden subsection that is not listed in the ToC but still sets the relative counter
+\DeclareDocumentCommand{\subsectionhidden}{ m O{0} }{
+        \refaddtocounter{subsection}{#2}
+        \protected@edef \@currentlabel {\csname p@subsection\endcsname \csname thesubsection\endcsname}
+        \NR@gettitle{#1}
+        \subsectionmark{#1} % Add subsection mark (header)
+}
+
+% Call a new customized section
+% Arg1: Input * if we want an empty and hidden subsection
+% Arg2: Switch for special section types
+% Arg3: Passed to the special section type
+% Arg4: Section name
+\DeclareDocumentCommand{\mysection}{ s o o m }{
+        \IfNoValueTF {#2}{
+                \section{#4}
+        }{
+                \IfValueTF {#3}{
+                        \csname section#2\endcsname{#4}[#3]
+                }{
+                        \csname section#2\endcsname{#4}
+                }
+        }
+        \IfBooleanT {#1}{
+            % Emit the special empty section
+            \subsectionhidden{}
+        }
+}
+
+% Call a new customized subsection
+% Arg1: Input * if we want to mirror our subsection prepended with {\ --\ }
+% Arg2: Switch for special subsection types
+% Arg3: Passed to the special subsection type
+% Arg4: Subsection name
+\DeclareDocumentCommand{\mysubsection}{ s o o m }{
+        \IfBooleanT {#1}{
+                % We want a mirrored and hidden subsection
+                \subsectionhidden{\xspace\textendash\xspace #4}
+        }
+        \IfNoValueTF {#2} {
+                \subsection{#4}
+        }{
+                \IfValueT {#3}{
+                        \csname subsection#2\endcsname{#4}[#3]
+                }{
+                        \csname subsection#2\endcsname{#4}
+                }
+        }
+        \IfBooleanT {#1}{
+                % We want a mirrored and hidden subsection
+                \subsectionhidden{\xspace\textendash\xspace #4}
+        }
+}
+
+
+%%%%%%%%
+% Misc %
+%%%%%%%%
+
+% Fix the linebreaks for source code listings
+\lstdefinestyle{java}{
+    language=Java,
+    commentstyle=\color{MaterialGreen600},
+    keywordstyle=\color{MaterialBlueA700},
+    stringstyle=\color{MaterialRedA700},
+    moredelim=[il][\textcolor{MaterialBlueGrey600}]{$$},
+    moredelim=[is][\textcolor{MaterialBlueGrey600}]{\%\%}{\%\%},
+    %frame=L,
+    xleftmargin=\parindent,
+    backgroundcolor=\color{MaterialBlueGrey50},
+    rulecolor=\color{MaterialBlueGrey50},
+    fillcolor=\color{MaterialBlueGrey50},
+    rulesepcolor=\color{MaterialBlueGrey50}
+}
+
+\lstdefinestyle{c}{
+    language=C
+}
+
+\lstdefinestyle{vhdl}{
+    language=VHDL
+}
+
+\lstdefinestyle{shell}{
+    language=bash
+}
+
+% Set default style to java for code listings
+\lstset{
+    basicstyle=\ttfamily\small,
+    numberstyle=\footnotesize,
+    inputencoding=utf8,
+    captionpos=b,
+    % formatting
+    columns=fullflexible,keepspaces,
+    breaklines=true,
+    postbreak=\raisebox{0ex}[0ex][0ex]{\ensuremath{\hookrightarrow\space}},
+    %% whitespace
+    showtabs=false,
+    showspaces=false,
+    showstringspaces=false,
+    breakatwhitespace=true,
+    % frame
+    frame=single,
+    numbers=left
+}
+
+% Rename caption beginning of listings
+% \renewcommand{\lstlistingname}{Code}
+
+% Default label
+\def\labelitemi{\textendash}
+
+% Default path for images
+\graphicspath{{img/}}
+
+% Default graphics extensions when not explicitly mentioned - Ordered list
+\DeclareGraphicsExtensions{.png,.jpg,.pdf}
+
+
+
+%%%%%%%%%%%%%%%%%%%
+% Custom commands %
+%%%%%%%%%%%%%%%%%%%
+\newcommand{\tw}[1]{\texttt{#1}}
+\newcommand{\dash}{-{}}
+
+% Draws a danger sign, accepts a bordercolour and size as optional arguments
+\DeclareDocumentCommand{\dangersign}{ O{red} O{3ex} }{
+        \renewcommand\stacktype{L}
+    \scaleto{\stackon[1.3pt]{\color{#1}$\triangle$}{\tiny\bfseries !}}{#2}
+}
+
+% Monospaced shell commands
+\newcommand{\shellcommand}[1]{\indent\indent\texttt{#1}}
+
+% Troubleshooting box
+\DeclareDocumentCommand{\smartbox}{ +m }{
+        \begin{tcolorbox}[breakable,enhanced]
+                #1
+        \end{tcolorbox}
+}
+
+
+% Reference section by number and name
+\newcommand{\secref}[1]{\mbox{\ref{#1}.\,\nameref{#1}}}
+
+% Reference subsection by section number, section name and subsection name
+\newcommand{\subsecref}[2]{\mbox{\ref{#1}.\,\nameref{#1}\nameref{#2}}}
+
+% Capitalcase section referencing
+\def\sectionautorefname{Section}
+
+% Capitalcase subsection referencing
+\def\subsectionautorefname{Subsection}
+
+% Captialcase subsubsection referencing
+\def\subsubsectionautorefname{Subsubsection}
+
+
+% General virtualbox
+\DeclareDocumentCommand{\myvbox}{ O{red} m m } {
+        \virtualbox{\dangersign[#1]\textbf{#2 }}[#3]
+}
+
+% Standardized note; Requires to be read and adapt the solution accordingly
+\DeclareDocumentCommand{\todo}{ m }{
+        \virtualbox{\textbf{TODO: }}[#1]
+}
+
+% Standardized info; Informs the reader of why something is done, can be ommitted
+\DeclareDocumentCommand{\info}{ m }{
+        \virtualbox{\emph{Info: }}[#1]
+}
+
+% Standardized note; Requires to be read and adapt the solution accordingly
+\DeclareDocumentCommand{\note}{ m }{
+        \virtualbox{\textbf{Note: }}[#1]
+}
+
+% Standardized warning; Give a general warning about things to happen
+\DeclareDocumentCommand{\warn}{ m }{
+        \virtualbox{\dangersign\textbf{\textsc{Warning: }}}[#1]
+}
+
+% Standardized caution; Pay extra attention on this.
+\DeclareDocumentCommand{\caution}{ m }{
+        \virtualbox{\dangersign[yellow]\textbf{\textsc{Caution: }}}[#1]
+}
+
+% Standardized important; Important notification of what can be ignored for now.
+\DeclareDocumentCommand{\important}{ m }{
+        \virtualbox{\textbf{\textsc{Important: }}}[#1]
+}
+
+\DeclareDocumentCommand{\virtualbox}{ m O{Fill me in!} }{
+        \parbox[t]{\widthof{#1}}{#1}
+        \parbox[t]{\linewidth-\widthof{#1}}{#2}
+}
+
+% Vertical spacing in arrays
+\newcommand{\ra}[1]{\renewcommand{\arraystretch}{#1}}
+
+
+%%%%%%%%%%%%%%%
+% Page styles %
+%%%%%%%%%%%%%%%
+
+% % Required to keep access all these different extramarks
+% \settitlemarks*{section,subsection}
+%
+% % Style applied to the page when a section is defined
+% \newpagestyle{general}{
+%         \setheadrule{.55pt}
+%         \setfoot
+%         [\includegraphics[width=1.5cm]{./systems-cover/systemslogo-3colour-blacktext.pdf}]% even-left
+%         []% even-centre
+%         []% even-right
+%         {}% odd-left
+%         {}% odd-centre
+%         {\includegraphics[width=1.5cm]{./systems-cover/systemslogo-3colour-blacktext.pdf}}% odd-right
+%         \sethead
+%         % [\fontsize{10}{12}\selectfont \firstextramarks{section}\thesection{ \textendash\xspace \thepage}]% even-left
+%         [\fontsize{10}{12}\selectfont \firstextramarks{section}\thepage]% even-left
+%         [\fontsize{10}{12}\selectfont \firstextramarks{section}\textbf\sectiontitle \firstextramarks{subsection}\subsectiontitle]% even-centre
+%         [\fontsize{10}{12}\selectfont Bachelor Thesis 183b]% even-right
+%         {\fontsize{10}{12}\selectfont Bachelor Thesis 183b}% odd-left
+%         {\fontsize{10}{12}\selectfont \firstextramarks{section}\textbf\sectiontitle \firstextramarks{subsection}\subsectiontitle}% odd-centre
+%         {\fontsize{10}{12}\selectfont \firstextramarks{section}\thepage}% odd-right
+%         % {\fontsize{10}{12}\selectfont \firstextramarks{section}\thesection{ \textendash\xspace \thepage}}% odd-right
+% }
+%
+% \makeatother
+%
+% \endinput
