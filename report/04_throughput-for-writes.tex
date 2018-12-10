@@ -25,35 +25,37 @@
             \vspace*{-.5\baselineskip}
             \makebox[1\linewidth][c]{%
                 \centering
-            \begin{subfigure}[t!]{0.55\textwidth}
-                \centering
-                \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_throughput.png}
-                \caption{Request throughput.\label{fig:sets_mw_tp}}
-            \end{subfigure}
-            \begin{subfigure}[t!]{0.55\textwidth}
-                \centering
-                \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_queue-size.png}
-                \caption{Queue sizes.\label{fig:sets_mw_qs}}
-            \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_throughput.png}
+                    \caption{Request throughput.\label{fig:sets_mw_tp}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_queue-size.png}
+                    \caption{Queue sizes.\label{fig:sets_mw_qs}}
+                \end{subfigure}
             }
             \makebox[1\linewidth][c]{%
-            \begin{subfigure}[t!]{0.55\textwidth}
                 \centering
-                \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_queue-wait-time.png}
-                \caption{Queue waiting time.\label{fig:sets_mw_qwt}}
-            \end{subfigure}
-            \begin{subfigure}[t!]{0.55\textwidth}
-                \centering
-                \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_response_time.png}
-                \caption{Response times.\label{fig:sets_mw_rt}}
-            \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_mc-comm-time.png}
+                    \caption{Memcached communication time.\label{fig:sets_mw_mct}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_queue-wait-time.png}
+                    \caption{Queue waiting time.\label{fig:sets_mw_qwt}}
+                \end{subfigure}
             }
             \makebox[1\linewidth][c]{%
-            \begin{subfigure}[t!]{0.55\textwidth}
                 \centering
-                \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_mc-comm-time.png}
-                \caption{Memcached communication time.\label{fig:sets_mw_mct}}
-            \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/4-0_mw_response_time.png}
+                    \caption{Response times.\label{fig:sets_mw_rt}}
+                \end{subfigure}
             \caption{\mw{} statistics based on SET requests for various amounts of worker threads and active
                      clients.\label{fig:mw_sets_sll}}
             }
