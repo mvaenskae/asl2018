@@ -22,7 +22,7 @@ function subexperiment_21()
         str2="$str1 0 MW threads,"
         for rep_count in 1 2 3; do
             str3="$str2 rep ${rep_count}/3,"
-            for vc_count in 01 02 04 08 16 32 40 48; do
+            for vc_count in 01 02 04 08 16 32 44 56 64; do
 
                 echo "$str3 for ${vc_count} MT clients"
                 if [[ "${is_read}" == true ]]; then
@@ -87,7 +87,7 @@ function subexperiment_31()
             str2="$str1 using ${thread_count} middleware threads"
             for rep_count in 1 2 3; do
                 str3="$str2 repetition ${rep_count}/3"
-                for vc_count in 01 02 04 08 16 32 44 40 48; do
+                for vc_count in 01 02 04 08 16 32 48; do
 
                     echo "$str3 for ${vc_count} clients"
                     if [[ "${is_read}" == true ]]; then
@@ -123,7 +123,7 @@ function subexperiment_32()
             str2="$str1 using ${thread_count} middleware threads"
             for rep_count in 1 2 3; do
                 str3="$str2 repetition ${rep_count}/3"
-                for vc_count in 01 02 04 08 16 32 40 48; do
+                for vc_count in 01 02 04 08 16 32 48; do
 
                     echo "$str3 for ${vc_count} clients"
                     if [[ "${is_read}" == true ]]; then
@@ -154,7 +154,7 @@ function subexperiment_40()
         str2="$str1 using ${thread_count} middleware threads"
         for rep_count in 1 2 3; do
             str3="$str2 repetition ${rep_count}/3"
-                for vc_count in 01 02 04 08 16 32 40 48; do
+                for vc_count in 01 02 04 08 16 32 48; do
 
                 echo "$str3 for ${vc_count} clients"
                 LOOP_EXPERIMENT_VARS="worker_threads=${thread_count} repetition=${rep_count} vc=${vc_count} type=SET set_ratio=1 get_ratio=0"
