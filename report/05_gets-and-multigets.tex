@@ -43,7 +43,7 @@
             \end{tabular}
         }
             \caption{Experimental parameters for experiments 5.1 and 5.2.\label{tab:50_setup}}
-    \end{table}
+    \end{table}a single key, whereas this is not the case for the sharded case.
 
     \subsection{Sharded Case\label{subsec:5_sharded}}
 
@@ -93,13 +93,10 @@
             the system looks to be working optimally without outside interference.
 
             The distribution of percentiles at the 50-percentiles don't match for requests with 6 and 9 keys well. The
-            75-percentiles do on the other hand. This is an indication that\dots
-            
-            \warn{so we have the average at 75\%... what does that mean?}
-            
-            \dots matches the average response time graph which is expected.
+            75-percentiles do on the other hand. This is an indication that the distribution has multiple peaks to
+            different degrees. This agrees with the histograms obtained (see figure \ref{fig:histogram_sharded_mw}).
             Even though differently sized GET requests are not easily comparable their percentiles grow in a similar
-            fashion. This shows their distributions are all based on the same base model.
+            fashion. This shows their distributions are all based on the same base model though.
 
             For all requests the queue in the middleware is almost always empty. This shows the middleware performing
             well in terms of request handling. The hypothesis is therefore the middleware must be spending lots of time
@@ -107,7 +104,7 @@
             average communication and packet handling time per key size. Comparing the graph with figure
             \ref{fig:shard_mt_rt} the hypothesis is verified. A discussion comparing this behaviour with no sharding
             follows in subsection \ref{subsec:5_summary}.\newline
-            The throughput reported by the middleware in figure \ref{fig:shard_mw_tp}. shows a downwards trend for
+            The throughput reported by the middleware in figure \ref{fig:shard_mw_tp} shows a downwards trend for
             requests processed. This is expected as even though fewer requests are made, the throughput in keys
             requested increases.
 
@@ -159,8 +156,8 @@
             stabilize GET request variance at the cost of a higher average response time. This argument is strengthened
             when comparing the average response times of figures \ref{fig:noshard_mt_rt} and \ref{fig:shard_mt_rt}. For
             non-sharding the average response times are therefore lower (marginally for key sizes below 9) but higher
-            variances are to be expected. For both plots the response time for keys of size 1 are virtually identical.
-            This is expected as sharding should not influence this metric.
+            variances are to be expected. For both experiments the response time for keys of size 1 are virtually
+            identical. This is expected as sharding should not influence this metric.
 
             % The distribution of percentiles at the 50-percentile matches the average response time graph which is expected.
             % Even though differently sized GET requests are not easily comparable their percentiles grow in a similar
@@ -174,6 +171,8 @@
             The reported throughput has a slightly stronger bent after 3 keys compared to sharded responses but overall
             the throughputs are comparable between sharded and non-sharded. A closer comparison shows the system
             performing better for GETs with 3 keys and not using sharding (2543 [4] for non-sharded and 2291.64 [12]).
+            This reflects back in the percentiles. For the non-sharded case three keys behave extremely similar to a
+            single key, whereas this is not the case for the sharded case.
 
     \subsection{Histogram\label{subsec:5_histograms}}
 
@@ -213,9 +212,9 @@
 
         Noteworthy in figure \ref{fig:histogram_sharded_mw} is the second hill between 7.5\textendash10.0ms. It is
         somewhat visible on the respective \srv{} measurement but doesn't exist for the non-sharded case. This behaviour
-        is at first odd but can be explained with the following reasoning\dots
-
-        \warn{Some splain to do!}
+        may be due to servers having a variable response time and with each sharded request convolving the expected
+        response times from each server for one third of the request size keys. As such the long responses are ``bundled
+        up'' and disappear from the observation and slow servers are only expected to send 2 and not 6 keys.
 
         Additionally the histograms show very few outliers in the last bucket. The represented curves are therefore well
         suited to explain the distribution of response times.
@@ -226,7 +225,7 @@
     \subsection{Summary\label{subsec:5_summary}}
 
         The question on how much sharding improves network performance is not easy to answer. Overall the throughput
-        stays mostly comparable for GETs with same key sizes.% (and resulting response times).
+        stays mostly comparable for GETs with same key sizes.
 
         The only measurable metric that may be of interest is the reduced response time for the non-sharded case. But
         this only shows significantly for large keys. This seems to indicate that coordinating keys between three
@@ -254,3 +253,8 @@
         not SET requests. As they are send in a 1:1 ratio though, simply by multiplying the amount of requests for
         response time calculation gives a very good approximation of the response time. This response time is then the
         average response time for both GET and SET requests though.
+
+        % Lastly the number of requests may seem low but including the results from experiment \ref{subsec:2_two-servers}
+        % it is clear that memtier instances are not saturating memcached and vice-versa. The throughput received
+        % therefore is expected to not saturate for GET requests with a single key but more keys add significantly to
+        % the throughput of the system.
