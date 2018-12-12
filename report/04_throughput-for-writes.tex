@@ -92,20 +92,28 @@
 
         Based on the experiments above, fill out the following table with the data corresponding to the maximum throughput point for all four worker-thread scenarios.
 
-        \begin{center}
-            {Maximum throughput for the full system}
-            \begin{tabular}{|l|p{1.5cm}|p{1.5cm}|p{1.5cm}|p{1.5cm}|}
-                \hline                                            & WT=8    & WT=16   & WT=32    & WT=64    \\
-                \hline Amount of active clients                   & 48      & 96      & 192      & 288      \\
-                \hline Throughput (Middleware)                    & 6680.06 & 8615.87 & 10327.67 & 11468.23 \\
-                \hline Throughput (Derived from MW response time) & 7674.19 & 9568.57 & 11340.34 & 13171.54 \\
-                \hline Throughput (Client)                        & 6675.14 & 8610.97 & 10323.38 & 11462.18 \\
-                \hline Average time in queue                      & 3.82    & 6.28    & 10.70    & 10.72    \\
-                \hline Average length of queue                    & 10.97   & 23.51   & 50.35    & 56.99    \\
-                \hline Average time waiting for memcached         & 2.28    & 3.57    & 6.02     & 10.84    \\
-                \hline 
-            \end{tabular}
-        \end{center}
+        \begin{table}
+            \def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}%
+            \small{
+                \centering
+                \begin{tabular}{l*{8}{c}}
+                    \toprule
+                    & & \multicolumn{3}{c}{Throughput}  & \multicolumn{2}{c}{Average Time} & \\
+                    \cmidrule(lr){3-5}\cmidrule(lr){6-7}
+                    % \cmidrule(lr){7-8}\cmidrule(lr){9-10}
+                    WT & Clients & \mw      & \mw{} \textendash{} IL & \cli     & Memcached & Queue & Queue Size & \\
+                    \midrule
+                    8  & 48      & 6680.06  & 7674.19                & 6675.14  & 2.28      & 3.82  & 10.97 \\
+                    16 & 96      & 8615.87  & 9568.57                & 8610.97  & 3.57      & 6.28  & 23.51 \\
+                    32 & 192     & 10327.67 & 11340.34               & 10323.38 & 6.02      & 10.70 & 50.35 \\
+                    64 & 288     & 11468.23 & 13171.54               & 11462.18 & 10.84     & 10.72 & 56.99 \\
+                    \addlinespace
+                    \bottomrule
+                \end{tabular}
+                \caption{Evaluation of maximum throughputs of SETs for a full system. IL denotes the Interactive Law
+                applied on the response time of the respective target.\label{tab:4_throughput-summary}}
+            }
+        \end{table}
 
         The numbers presented are derived applying the reasoning in subsubsection
         \ref{subsubsec:4_full-system_explanation}. It can be observed that the trend to an increase in throughput with

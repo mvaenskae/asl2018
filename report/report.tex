@@ -52,11 +52,13 @@
 
     \newpage
 
-    \include{./01_system-overview}
-    \include{./02_baseline-without-middleware}
-    \include{./03_baseline-with-middleware}
-    \include{./04_throughput-for-writes}
-    \include{./05_gets-and-multigets}
-    \include{./06_2k-analysis}
-    \include{./07_queueing-model}
+    % \let\clearpage\relax
+
+    \input{01_system-overview}
+    \input{02_baseline-without-middleware}
+    \input{03_baseline-with-middleware}
+    \input{04_throughput-for-writes}
+    \input{05_gets-and-multigets}
+    \input{06_2k-analysis}
+    \input{07_queueing-model}
 \end{document}

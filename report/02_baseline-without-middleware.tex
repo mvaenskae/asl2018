@@ -148,18 +148,12 @@
                 \end{tabular}
                 \caption{Evaluation of maximum throughputs of baseline experiment. In square brackets the standard
                 deviation is given, numbers are rounded to two significant figures.\label{tab:21_throughput}}
-                % \vspace*{-1.5\baselineskip}
             }
         \end{table}
 
         The difference of how GETs and SETs are bottlenecked has been described in subsections \ref{subsec:2_one-server}
         and \ref{subsec:2_two-servers} and expected at this point. Table \ref{tab:iperf_results} summarises the
         theoretical limits.
-
-        % The behaviour of slower reads than writes may be peculiar at first but verifying the machine configuration
-        % and doing throughput tests with iperf verifies the behaviours observed. In table \ref{tab:iperf_results} the
-        % respective upload bandwidths between different machine types is listed next to a summary of the maximum
-        % theoretical amount of request types each machine can send/receive (when applicable).
 
         For the case of GET with one memcached instance this limit matches with the observed result. For two
         memcached instances with a single memtier instance this limit is twice as high as two instances are queried.
@@ -172,11 +166,10 @@
         respective throughput.
 
         As the theoretical limit for three memtier instances should be 18233 keys it is interesting to observe only
-        a utilisation of 89\%. It is believed that decreasing the latency would result in reaching this limit but
-        with the unavailability of controlling the deployment locations of VMs this task becomes a game of trial and
-        error.
-
-        % \warn{Continue this maybe?}
+        a utilisation of 89\%. Observing dstat results shows the system reaching full saturation on the CPU end for
+        counts of 192 clients and beyond (in those cases the system is actually overloaded), meaning even though the
+        network still can accommodate requests the system is CPU bound. As such it is concluded that a single \srv{}
+        cannot handle more than 192 clients reasonably.
 
         The interactive law graphs align in all cases with the measured numbers and as such it can be deduced the
         thinking time is very close to 0 and all components introducing long response times are observable within this
