@@ -30,9 +30,11 @@ class PlottingFunctions:
                                      title=experiment_title,
                                      xlim=xlim, ylim=ylim)
         if isinstance(xticks, tuple):
-            plt.xticks(xticks[0], xticks[1])
+            plt.xticks(xticks[0], xticks[1], rotation=45)
         else:
-            plt.xticks(xticks)
+            if xticks[0] == 6 or xticks[0] == 2:
+                np.insert(xticks, 0, 0)
+            plt.xticks(xticks, rotation=45)
         if huelabel is not None or stylelabel is not None:
             legend = plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
             for txt in legend.get_texts():
@@ -169,7 +171,7 @@ class StatisticsFunctions:
                                                                                     columns={"level_2": 'Percentile'})
 
     @staticmethod
-    def mm1(summary_table, to_plot):
+    def mm1(summary_table, plot=False):
         calculations = []
         for row in summary_table.itertuples():
             lamb = row[4]
@@ -205,7 +207,7 @@ class StatisticsFunctions:
         return mm1_analysis
 
     @staticmethod
-    def mmm(summary_table, to_plot):
+    def mmm(summary_table, plot=False):
         calculations = []
         for row in summary_table.itertuples():
             lamb = row[4]
@@ -469,6 +471,13 @@ class ExperimentPlotter:
         set_group = flattened[0].groupby(['Num_Clients', 'Repetition', 'Worker_Threads', 'Type'])
         get_group = flattened[1].groupby(['Num_Clients', 'Repetition', 'Worker_Threads', 'Type'])
 
+        # throughput_hosts_set = flattened[0].groupby(['NumClients', 'Repetition', 'Worker_Threads', 'Type', 'Host'])
+        # host_factors_set = StatisticsFunctions.get_sum(throughput_hosts_set, 'Request_Throughput')
+        #
+        # throughput_hosts_get = flattened[1].groupby(['NumClients', 'Repetition', 'Worker_Threads', 'Type', 'Host'])
+        # host_factors_get = StatisticsFunctions.get_sum(throughput_hosts_get, 'Request_Throughput')
+
+
         throughput_set = StatisticsFunctions.get_sum(set_group, 'Request_Throughput')
         throughput_get = StatisticsFunctions.get_sum(get_group, 'Request_Throughput')
         response_time_set = StatisticsFunctions.get_average(set_group, 'Response_Time')
@@ -498,7 +507,7 @@ class ExperimentPlotter:
             concatenated_queue_waiting_time = pd.concat([queue_waiting_time_set.assign(RequestType='SET'),
                                                          queue_waiting_time_get.assign(RequestType='GET')])
             concatenated_memcached_communication = pd.concat([memcached_communication_set.assign(RequestType='SET'),
-                                                               memcached_communication_get.assign(RequestType='GET')])
+                                                              memcached_communication_get.assign(RequestType='GET')])
             concatenated_queue_size = pd.concat([queue_size_set.assign(RequestType='SET'),
                                                  queue_size_get.assign(RequestType='GET')])
 
@@ -530,7 +539,7 @@ class ExperimentPlotter:
             PlottingFunctions.lineplot(concatenated_memcached_communication, exp_name, plot_base + "mw_mc-comm-time",
                                        x='Num_Clients', y='Memcached_Communication', hue='RequestType',
                                        style='Worker_Threads', xlabel='Number Memtier Clients',
-                                       ylabel='Middleware Communication and Response Handling (ms)',
+                                       ylabel='Memcached Handling (ms)',
                                        huelabel='Request Type', stylelabel='Worker Threads',
                                        xlim=(0, None), ylim=(0, None), xticks=xticks)
             PlottingFunctions.lineplot(concatenated_queue_size, exp_name, plot_base + "mw_queue-size", x='Num_Clients',
@@ -651,7 +660,7 @@ class ExperimentPlotter:
             PlottingFunctions.lineplot(concatenated_memcached_communication, exp_name, plot_base + "mw_mc-comm-time",
                                        x='Num_Clients', y='Memcached_Communication', hue='Worker_Threads',
                                        xlabel='Number Memtier Clients',
-                                       ylabel='Middleware Communication and Response Handling (ms)',
+                                       ylabel='Memcached Handling (ms)',
                                        huelabel='Worker Threads', xlim=(0, None), ylim=(0, None), xticks=xticks)
             PlottingFunctions.lineplot(concatenated_queue_size, exp_name, plot_base + "mw_queue-size", x='Num_Clients',
                                        y='Queue_Size', hue='Worker_Threads', xlabel='Number Memtier Clients',
@@ -911,7 +920,7 @@ class ExperimentPlotter:
         print("====================\n\n")
 
     @staticmethod
-    def exp_6_pretty_table(exp_list, multiplicative_model=False):
+    def exp_6_pretty_table(exp_list, plot=False, multiplicative_model=False):
         exp_tables = []
         exp_tables_readable = []
         for key, value in exp_list:
@@ -967,38 +976,41 @@ class ExperimentPlotter:
             exp_tables.append(summary)
 
         result = pd.concat(exp_tables)
-        
-        result_throughput = result[['Type', 'Request_Throughput_Mean', 'Request_Throughput_Residual']]
-        result_response_time = result[['Type', 'Response_Time_Mean', 'Response_Time_Residual']]
 
-        throughput_get = result_throughput[~result_throughput.Type.str.contains('SET')]
-        throughput_set = result_throughput[~result_throughput.Type.str.contains('GET')]
-        response_time_get = result_response_time[~result_response_time.Type.str.contains('SET')]
-        response_time_set = result_response_time[~result_response_time.Type.str.contains('GET')]
+        if plot:
+            result_throughput = result[['Type', 'Request_Throughput_Mean', 'Request_Throughput_Residual']]
+            result_response_time = result[['Type', 'Response_Time_Mean', 'Response_Time_Residual']]
 
-        PlottingFunctions.resplot(throughput_set, "Experiment 6 - SET", '6-0_throughput-set-residual',
-                                  x='Request_Throughput_Mean',
-                                  y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
-                                  ylabel='Residual')
-        PlottingFunctions.resplot(throughput_get, "Experiment 6 - GET", '6-0_throughput-get-residual',
-                                  x='Request_Throughput_Mean',
-                                  y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
-                                  ylabel='Residual')
-        PlottingFunctions.resplot(response_time_set, "Experiment 6 - SET", '6-0_response-time-set-residual',
-                                  x='Response_Time_Mean',
-                                  y='Response_Time_Residual', xlabel='Mean Response Time',
-                                  ylabel='Residual')
-        PlottingFunctions.resplot(response_time_get, "Experiment 6 - GET", '6-0_response-time-get-residual',
-                                  x='Response_Time_Mean',
-                                  y='Response_Time_Residual', xlabel='Mean Response Time',
-                                  ylabel='Residual')
+            throughput_get = result_throughput[~result_throughput.Type.str.contains('SET')]
+            throughput_set = result_throughput[~result_throughput.Type.str.contains('GET')]
+            response_time_get = result_response_time[~result_response_time.Type.str.contains('SET')]
+            response_time_set = result_response_time[~result_response_time.Type.str.contains('GET')]
 
-        PlottingFunctions.qqplot(throughput_set, "Experiment 6 - SET Throughput", '6-0_throughput-set-qq', x='Request_Throughput_Residual')
-        PlottingFunctions.qqplot(throughput_get, "Experiment 6 - GET Throughput", '6-0_throughput-get-qq', x='Request_Throughput_Residual')
-        PlottingFunctions.qqplot(response_time_set, "Experiment 6 - SET Response Time", '6-0_response-time-set-qq',
-                                 x='Response_Time_Residual')
-        PlottingFunctions.qqplot(response_time_get, "Experiment 6 - GET Response Time", '6-0_response-time-get-qq',
-                                 x='Response_Time_Residual')
+            PlottingFunctions.resplot(throughput_set, "Experiment 6 - SET", '6-0_throughput-set-residual',
+                                      x='Request_Throughput_Mean',
+                                      y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
+                                      ylabel='Residual')
+            PlottingFunctions.resplot(throughput_get, "Experiment 6 - GET", '6-0_throughput-get-residual',
+                                      x='Request_Throughput_Mean',
+                                      y='Request_Throughput_Residual', xlabel='Mean Request Throughput',
+                                      ylabel='Residual')
+            PlottingFunctions.resplot(response_time_set, "Experiment 6 - SET", '6-0_response-time-set-residual',
+                                      x='Response_Time_Mean',
+                                      y='Response_Time_Residual', xlabel='Mean Response Time',
+                                      ylabel='Residual')
+            PlottingFunctions.resplot(response_time_get, "Experiment 6 - GET", '6-0_response-time-get-residual',
+                                      x='Response_Time_Mean',
+                                      y='Response_Time_Residual', xlabel='Mean Response Time',
+                                      ylabel='Residual')
+
+            PlottingFunctions.qqplot(throughput_set, "Experiment 6 - SET Throughput", '6-0_throughput-set-qq',
+                                     x='Request_Throughput_Residual')
+            PlottingFunctions.qqplot(throughput_get, "Experiment 6 - GET Throughput", '6-0_throughput-get-qq',
+                                     x='Request_Throughput_Residual')
+            PlottingFunctions.qqplot(response_time_set, "Experiment 6 - SET Response Time", '6-0_response-time-set-qq',
+                                     x='Response_Time_Residual')
+            PlottingFunctions.qqplot(response_time_get, "Experiment 6 - GET Response Time", '6-0_response-time-get-qq',
+                                     x='Response_Time_Residual')
 
         result_print = pd.concat(exp_tables_readable)
         result_print = result_print.sort_values(by=['Type', 'Memcached', 'Middlewares', 'Worker_Threads'])
@@ -1122,9 +1134,9 @@ if __name__ == '__main__':
 
     figures_wanted = False
 
-    # ExperimentPlotter.experiment_2(figures_wanted)
-    # ExperimentPlotter.experiment_3(figures_wanted)
-    # ExperimentPlotter.experiment_4(figures_wanted)
-    ExperimentPlotter.experiment_5(figures_wanted)
-    # ExperimentPlotter.experiment_6(figures_wanted)
-    # ExperimentPlotter.experiment_7(figures_wanted)
+    #ExperimentPlotter.experiment_2(figures_wanted)
+    ExperimentPlotter.experiment_3(figures_wanted)
+    #ExperimentPlotter.experiment_4(figures_wanted)
+    #ExperimentPlotter.experiment_5(figures_wanted)
+    #ExperimentPlotter.experiment_6(figures_wanted)
+    ExperimentPlotter.experiment_7(figures_wanted)

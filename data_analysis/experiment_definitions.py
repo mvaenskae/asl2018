@@ -7,6 +7,7 @@ class ExperimentDefinitions:
     """
 
     log_base = pathlib.Path.home().joinpath("ASL_RESULTS")
+    repetitions = [1, 2, 3]
 
     @staticmethod
     def subexpriment_00():

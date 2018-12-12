@@ -1,11 +1,9 @@
-import pathlib
-
 from experiment_definitions import ExperimentDefinitions
 
 
 class PathHelper:
     home = ExperimentDefinitions.log_base
-    repetitions = [1, 2, 3]
+    repetitions = ExperimentDefinitions.repetitions
 
     def __init__(self, experiment_dictionary):
         self.experiment_id = experiment_dictionary.get('experiment_id')
