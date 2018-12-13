@@ -250,11 +250,6 @@
         The interactive law cannot be simply applied to the throughput numbers obtained in figures \ref{fig:shard_mw_tp}
         and \ref{fig:noshard_mw_tp}. Calculating the response time it becomes apparent that the numbers don't match up.
         This stems from the fact that only half the total requests are displayed. The graph only display GET requests,
-        not SET requests. As they are send in a 1:1 ratio though, simply by multiplying the amount of requests for
-        response time calculation gives a very good approximation of the response time. This response time is then the
-        average response time for both GET and SET requests though.
-
-        % Lastly the number of requests may seem low but including the results from experiment \ref{subsec:2_two-servers}
-        % it is clear that memtier instances are not saturating memcached and vice-versa. The throughput received
-        % therefore is expected to not saturate for GET requests with a single key but more keys add significantly to
-        % the throughput of the system.
+        not both, SET \& GET requests. As they are send in a 1:1 ratio though, simply by multiplying the amount of
+        requests for response time calculation gives a very good approximation of the average response time for GETs and
+        SETs. 
