@@ -76,7 +76,7 @@
             The throughput of SET requests behaves most similarly to the baseline with 64 worker threads yet the
             throughput for 32 worker threads is in general higher for 48 and 96 connected clients. This observation will
             be discussed in the following paragraphs and explained with more data. It can be inferred that the
-            throughput of a single client is limited around 12000 requests, a contrast to the measured 15800 without the
+            throughput of a single client is limited around 11546 requests, a contrast to the measured 16334 without the
             use of a middleware. This limit occurs for 192 virtual clients. The throughput being lower for fewer worker
             threads is reasonable and the non-linear scaling highly likely due to the fact that \mw{}s have only 8
             physical cores.
@@ -88,8 +88,9 @@
             communication and packet handling time does flatten though. The height of flattened sections can be
             explained due to thread scheduling (the flattened lines are all separated proportional to the number of
             worker threads divided by the core count of the machine). The reasoning for flattening due to the fact that
-            the middleware cannot handle more requests in parallel and is therefore saturating. This can be seen by
-            queues growing for the configuration of active clients and threads.
+            the middleware cannot handle more requests in parallel and is therefore saturating for the worker thread and
+            client configuration. This can be seen by queues growing for the configuration of active clients and
+            threads.
 
             As such the total response time of the middleware is for a large amount of clients and few worker threads
             determined by the queueing time and for few clients and many worker threads determined mostly by the
@@ -97,13 +98,14 @@
 
             Coming back to the open question of why 32 worker threads perform better than 64 for 48 and 96 clients
             requires the use of the queue where requests are stored. As long as this queue is not always at least the
-            size of worker threads some threads don't have anything to do. This results in an effectively smaller
-            throughput as only some threads are working but the threads waiting for a new element contend on a shared
-            lock on the queue. Only once the queue at 192 clients approaches 64 elements does the middleware become more
-            saturated and is even more so at 288 clients. It is very close to the point of complete saturation when
-            looking at the queue size, yet no real increase in throughput was measured. As the standard deviation for
-            288 clients and 64 worker threads is rather large compared to previous results for it the assumption can be
-            made that beyond a certain amount of threads and connections the cloud environment is not scaling well.
+            size of worker threads performance impact can be expected due to worker threads being idle and waiting for a
+            new request to process. This results in an effectively smaller throughput as only some threads are working
+            but the threads waiting for a new element contend on a shared lock on the queue. Only once the queue at 192
+            clients approaches 64 elements does the middleware become more saturated and is even more so at 288 clients.
+            It is very close to the point of complete saturation when looking at the queue size, yet no real increase in
+            throughput was measured. As the standard deviation for 288 clients and 64 worker threads is rather large
+            compared to previous results allows the claim that beyond a certain amount of threads and connections the
+            cloud environment is not scaling well.
 
             Overall it can be concluded that for 8\textendash 32 clients the maximal saturation point has been reached
             and for 64 threads the saturation point is within a few percent or has been reached.
@@ -167,10 +169,10 @@
             large differences can be observed except a stable phase from the very beginning. The throughput for SET
             requests behaves much ``cleaner'' for increasing amounts of worker-threads, meaning that for not enough
             saturation by connected clients the resulting performance for SETs behaves the same. Also more throughput
-            occurs throughout the system. The maximum observed throughput is 15300 requests, very close to the baseline
-            experiment of 15800 requests. The middleware shows be only a small disturbance to the overall system for
-            enough worker threads active. The scaling of throughput for worker threads follows the same reasoning as in
-            experiment \ref{subsec:3_one-middleware}.
+            occurs throughout the system. The maximum observed throughput is 15312 requests, very close to the baseline
+            experiment of 16334 requests. The middleware shows to be a reasonably small disturbance to the overall
+            system for enough worker threads active. The scaling of throughput for worker threads follows the same
+            reasoning as in experiment \ref{subsec:3_one-middleware}.
 
             The response times reflect the increased throughput with overall lower numbers. There is less spread for SET
             requests amongst different amounts of worker threads. A comparison between the response times with a single
@@ -178,7 +180,7 @@
             packet handling time doubling follows from the fact that with two concurrent \mw{} SET requests sent to the
             same \srv{} a serialization of requests is expected (as the \srv{} is only single-threaded). Thusly larger
             response times on the end of memcached are observed. This would result in an overall higher response time if
-            not for the fact that as there are now two \mw{}s each instance is only subject to half the load generated
+            not for the fact that as there are now two \mw{}s, each instance is only subject to half the load generated
             by \cli{}s. As such the queue sizes are also only half of what was measured when compared to a single
             instance of \mw{}.
 
@@ -191,11 +193,9 @@
             Another artifact of running in a cloud environment can be seen for 6 clients and 32 worker threads where the
             throughput is low and the response time including memcached communication unexpectedly high. Looking at the
             respective logs shows a likely network issue, again on the second run, as no system is overtaxed yet the
-            Server is not sending enough data. Statistics generated by ping indicate unusually high response times for
+            \srv{} is not sending enough data. Statistics generated by ping indicate unusually high response times for
             communication between \mw{}s and the single \srv{}. This reflects in the memcached communication time and
-            response time of the system. The system is for most of the supposedly stable window overall very shaky. As
-            other experiments are not affected by this an attribution to the middleware would be flawed and such
-            inconsistent behaviour should show overall.
+            response time of the system. The system is for most of the supposedly stable window overall very shaky.
 
     \subsection{Summary\label{subsec:3_summary}}
 
@@ -211,11 +211,11 @@
                 \cmidrule(lr){7-8}\cmidrule(lr){9-10}
                 Type  & Machine & Exp 3.1  & Exp 3.2  & Exp 3.1 & Exp 3.2 & Exp 3.1 & Exp 3.2 & Exp 3.1 & Exp 3.2 \\
                 \midrule
-                GET   & \cli    & 2936.83  & 2923.78  & 65.31   & 65.94   & N/A     & N/A     & 0.00    & 0.00 \\
-                      & \mw     & 2939.61  & 2929.16  & 64.18   & 70.31   & 42.18   & 20.95   & 0.00    & 0.00 \\
+                GET      & \cli & 2936.83  & 2923.78  & 65.32 & 65.92 & N/A   & N/A   & 0.00 & 0.00 \\
+                         & \mw  & 2939.61  & 2929.16  & 64.17 & 69.02 & 42.17 & 20.27 & 0.00 & 0.00 \\
                 \addlinespace
-                SET   & \cli    & 11548.63 & 15305.89 & 16.73   & 12.55   & N/A     & N/A     & N/A     & N/A \\
-                      & \mw     & 11545.56 & 15309.86 & 8.07    & 11.38   & 3.80    & 3.03    & N/A     & N/A \\
+                SET      & \cli & 11549.70 & 15308.52 & 16.73 & 12.55 & N/A   & N/A   & N/A  & N/A \\
+                         & \mw  & 11546.60 & 15312.49 & 8.07  & 11.29 & 3.80  & 3.01  & N/A  & N/A \\
                 \bottomrule
             \end{tabular}
             \caption{Evaluation of maximum throughputs for one and two \mw{}s in the system with 192
@@ -228,76 +228,80 @@
         sufficient, it is possible to use the middleware's instrumentation and deduce the system behaviour from them.
 
         In the case of GET requests the behaviour between experiments \ref{subsec:2_one-server},
-        \ref{subsec:3_one-middleware} and \ref{subsec:3_two-middlewares} is comparable, not the benchmarking results
-        though. Oddly for six clients the system is not immediately saturated for any worker thread configuration with a
-        single middleware. Only at twelve clients this saturation occurs. It is quite likely that the overhead of the
-        middleware is just high enough to introduce minimal latencies in such a configuration as the system has empty
-        queues and as such it is not a problem of queueing. As experiment \ref{sec:2} and \ref{sec:3} were run on two
-        different instances of machines changes in benchmarking performances are expected, yet the general behaviour
-        should stay comparable. This is the case for GETs in our experiments as well as for SETs.
+        \ref{subsec:3_one-middleware} and \ref{subsec:3_two-middlewares} is comparable. Oddly for six clients the single
+        \mw{} configuration is not immediately saturated for any amount of worker threads. Only at twelve clients this
+        saturation occurs. It is quite likely that the overhead of the middleware is just high enough to introduce
+        minimal latencies in such a configuration as the system has empty queues and as such it is not a problem of
+        queueing. As experiment \ref{sec:2} and \ref{sec:3} were run on two different instances of machines changes in
+        benchmarking performances are expected, yet the general behaviour should stay comparable. This is the case for
+        GETs in our experiments as well as for SETs.
 
         In the case for SET requests the trends with more active clients introducing more throughput does not always
-        match. At some points a flattening occurs and no more throughput increases are observed. This is the point
-        where the middleware slows down the system as it cannot handle more requests. There is a trend of more worker
-        threads introducing more throughput. Also adding another middleware helps and actually shows to scale better
-        than adding more worker threads when comparing the throughput graphs for the total amount of comparable worker
-        threads between both experiments (for experiment \ref{subsec:3_two-middlewares} half the worker thread count
-        must be evaluated as two middlewares are used). This is to be expected as at some point scheduling overhead on a
-        single system results in slowdowns. Also the second instance could be allocated better in the cloud environment
-        and thus perform for the same task just better by simply being better networked.
+        match. As long as worker threads are not oversaturated the performance will not degrade. After oversaturating
+        the system the middleware slows down the system as it cannot handle more requests. There is a trend of more
+        worker threads introducing more throughput. Also adding another middleware helps and actually shows to scale
+        better than adding more worker threads when comparing the throughput graphs for the total amount of comparable
+        worker threads between both experiments (for experiment \ref{subsec:3_two-middlewares} half the worker thread
+        count must be evaluated as two middlewares are used). This is to be expected as at some point scheduling
+        overhead on a single system results in slowdowns. Another viable option is a better allocation in the cloud
+        environment.
 
-        For a thorough and clear evaluation of system behaviour including the internal queue sizes (and respective
-        waiting times) and the memcached communication overhead need to be included.\newline
+        For a thorough and clear evaluation of system behaviour it is necessary to include the queue and memcached
+        communication time.\newline
         As already observed for a given amount of worker threads the memcached communication begins to flatten for a
         certain amount of active clients. The trend is that more worker threads can handle more clients but the time to
         process grows. This aligns well with the fact that there is contention for the actual cores of the machine by
-        each worker thread. As each \mw{} has 8 cores it is expected that the communication time grows linearly in the
-        amount worker threads at the point of full saturation. This is also observed. The queue sizes also reflect in
-        the queue waiting times appropriately for both experiments in this section. Additionally the queue sizes offer a
-        good metric in evaluating the saturation of the system and aid in defining the maximum throughput for each
-        configuration of worker threads. Once the queue sizes reaches the amount of worker threads there is no more more
-        waiting on the next task for each worker thread but adding more elements than there are worker threads slows
-        down the system as at that point no bijection exists between worker threads and items to process.
+        each worker thread. A detailed explanation on the respective behaviour has been given in
+        subsubsection \ref{subsubsec:3_one-middleware}. The queue sizes also reflect in the queue waiting times
+        appropriately for both experiments in this section. Additionally the queue sizes offer a good metric in
+        evaluating the saturation of the system and aid in defining the maximum throughput for each configuration of
+        worker threads. Once the queue sizes reaches the amount of worker threads there is no more more waiting on the
+        next task for each worker thread but adding more elements than there are worker threads slows down the system as
+        at that point no bijection exists between worker threads and items to process.
 
-        Comparing the measured performances for GET requests in \ref{tab:3_throughput-summary} gives for \cli{}s and
-        \mw{}s similar results except for the discrepancy in response time for experiment
-        \ref{subsec:3_two-middlewares}. The response time differences can be explaining by assuming machines to perform
-        similar amongst experiments, thus a standard average is taken. For machines performing differently this can
-        result in being off from the weighted mean, which is the case here. The discrepancy in performance between
-        different machines occurs due to the unavailability of deciding machine allocations in the cloud environment and
-        them being sometimes moved from one rack to another (as has been shown by the previous outliers). The queue time
-        between one and two \mw{}s being different by a factor of two stems from the fact that two \mw{}s subject to
-        half the client load, henceforth a smaller queue is expected for heavy workloads.\newline
-        For SET requests an increase in performance is observed using two \mw{}s with a corresponding decrease of the
-        response time measured at memtier. The difference between response times observed at the middleware and memtier
-        are much larger for the case of a single middleware. A reasonable explanation could be related to the middleware
-        receiving SET requests with a single thread. If multiple requests buffer on the socket then multiple complete
-        requests can be processed much quicker from it than having to receive each TCP alone. Both systems do have the
-        same queue waiting time so the worker threads are performing similarly well. This strengthens the assumption
-        that OS-side buffering of TCP packets occur and not somewhere measurable within the middleware.
+        % Comparing the measured performances for GET requests in \ref{tab:3_throughput-summary} gives for \cli{}s and
+        % \mw{}s similar results except for the discrepancy in response time for experiment
+        % \ref{subsec:3_two-middlewares}.
 
-        As the middleware doesn't include the full response time the interactive law doesn't hold for this aspect. For
-        the throughput measured it describes much better the response time measured at memtier and as such it can be
-        used to derive the actual response time of the system. Two examples, one using the throughput to measure the
-        response time and the other to measure the throughput can be seen in figure \ref{fig:il_violation-example}.
-        Of interesting note is that for all but 64 worker threads the throughput estimated at 288 clients by the
-        interactive law somewhat matches the actual throughput.
+        % The response time differences can be explaining by assuming machines to perform
+        % similar amongst experiments, thus a standard average is taken. For machines performing differently this can
+        % result in being off from the weighted mean, which is the case here. The discrepancy in performance between
+        % different machines occurs due to the unavailability of deciding machine allocations in the cloud environment and
+        % them being sometimes moved from one rack to another (as has been shown by the previous outliers). The queue time
+        % between one and two \mw{}s being different by a factor of two stems from the fact that two \mw{}s subject to
+        % half the client load, henceforth a smaller queue is expected for heavy workloads.\newline
+        % For SET requests an increase in performance is observed using two \mw{}s with a corresponding decrease of the
+        % response time measured at memtier. The difference between response times observed at the middleware and memtier
+        % are much larger for the case of a single middleware. A reasonable explanation could be related to the middleware
+        % receiving SET requests with a single thread. If multiple requests buffer on the socket then multiple complete
+        % requests can be processed much quicker from it than having to receive each TCP alone. Both systems do have the
+        % same queue waiting time so the worker threads are performing similarly well. This strengthens the assumption
+        % that OS-side buffering of TCP packets occur and not somewhere measurable within the middleware.
+
+        As the middleware doesn't include the full response time the interactive law doesn't hold when assuming the
+        whole system is only \mw{} \textendash{} \srv. To fix this the interactive response time law, stated with
+
+        $$ R = \frac{N}{X} - Z $$
+
+        allows the modification of either $N$ (number of active clients) or the inclusion of $Z$ (the thinking time).
+        Including $Z$ is usually done by the inclusion of the RTT between \srv{} and \mw{}. To adjust $N$ it is relevant
+        to define what the number of actual jobs are in the current system. This can be modelled to various degrees of
+        complexity but an intuitive approach is the following:
+
+        $$
+        N =
+        \begin{cases}
+            \text{Size\textsubscript{Queue}} + \text{Worker Threads}   & \quad \text{if Worker Threads > Clients} \\
+            \text{Size\textsubscript{Queue}} + \text{Clients}          & \quad \text{otherwise}
+        \end{cases}
+        $$
+
+        In the following the interactive law is applied and the response time derived using the latency from each
+        experiment. In general the interactive law holds, some outliers are expected for high loads graceful failures
+        are not the nature of computers.
 
         \begin{figure*}
             \vspace*{-.5\baselineskip}
-            \makebox[1\linewidth][c]{%
-                \centering
-                \begin{subfigure}[t!]{0.55\textwidth}
-                    \centering
-                    \includegraphics[width=1\textwidth]{../data_analysis/figures/3-1_mw_throughput-il.png}
-                    \caption{\mw{} interactive law deriving the request throughput.\label{fig:mw_tp-il}}
-                \end{subfigure}
-                \begin{subfigure}[t!]{0.55\textwidth}
-                    \centering
-                    \includegraphics[width=1\textwidth]{../data_analysis/figures/3-1_mt_throughput.png}
-                    \caption{\cli{} measured request throughput.\label{fig:mt_tp}}
-                \end{subfigure}
-            }
             \makebox[1\linewidth][c]{%
                 \centering
                 \begin{subfigure}[t!]{0.55\textwidth}
@@ -308,10 +312,22 @@
                 \begin{subfigure}[t!]{0.55\textwidth}
                     \centering
                     \includegraphics[width=1\textwidth]{../data_analysis/figures/3-1_mt_response_time.png}
+                    \caption{\cli{} measured response time.\label{fig:mt_rt}}
+                \end{subfigure}
+            }
+            \makebox[1\linewidth][c]{%
+                \centering
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/3-2_mw_response-time-il.png}
+                    \caption{\mw{} interactive law deriving the response time.\label{fig:mw_rt-il}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/3-2_mt_response_time.png}
                     \caption{\cli{} measured response times.\label{fig:mt_rt}}
                 \end{subfigure}
             }
-            \caption{Example visualization of the violation of the interactive law when using the response time as
-                     reported on the middleware and the correctness of using the throughput measured to infer full
-                     system response times.\label{fig:il_violation-example}}
+            \caption{Visualizations of the interactive law plotted for experiments \ref{subsec:3_one-middleware} and
+                     \ref{subsec:3_two-middlewares}. High loads result in less correct predictions.\label{fig:3_il}}
         \end{figure*}

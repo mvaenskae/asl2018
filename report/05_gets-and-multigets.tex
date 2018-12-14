@@ -11,8 +11,8 @@
     \begin{itemize}
         \item GET requests are network bound on the end of each \srv{}. The number of requests is expected to go down
               for more keys as replies get larger.
-        \item SET requests are network bound on the end of each \cli{}. The number of requests is expected to not change
-              as SETs are of fixed size.
+        \item SET requests are CPU bound on the end of each \cli{}. The number of requests is expected to not change
+              due to CPU bounds but because the corresponding amount of GET requests is going down.
     \end{itemize}
     From experiment \ref{sec:4} it becomes clear that there is no significantly measurable performance impact using more
     worker threads than is required for clients. This means that any amount of worker threads beyond 8 is appropriate to
@@ -22,9 +22,9 @@
     are not yet observed with three \srv{}s active the decision was made to use 64 worker threads to exclude any
     performance impacts possible due to too little threading on the middleware.
 
-    Important in this section's data is the exclusion of the 60s stable-phase window as histograms are used. As memtier
-    reports histograms for the complete run and not a configurable stable window this decision was made to allow
-    comparing not only data from the middleware and memtier but also relate it to histograms.
+    Important in this section's data is the exclusion of the \SI{60}{\second} stable-phase window as histograms are
+    used. Memtier reports histograms for the complete run and not a configurable stable window this decision was made
+    to allow comparing not only data from the middleware and memtier but also relate it to histograms.
 
     \begin{table}
         \scriptsize{
@@ -43,7 +43,7 @@
             \end{tabular}
         }
             \caption{Experimental parameters for experiments 5.1 and 5.2.\label{tab:50_setup}}
-    \end{table}a single key, whereas this is not the case for the sharded case.
+    \end{table}
 
     \subsection{Sharded Case\label{subsec:5_sharded}}
 
@@ -88,15 +88,15 @@
         \subsubsection{Explanation\label{subsubsec:5_sharded_summary}}
 
             As can be seen in the subfigures of figure \ref{fig:shard_mt} the more keys are requested in a single GET
-            request the larger the average response becomes. There is a rough linear behaviour in increasing response
+            request the slower the average response becomes. There is a rough linear behaviour in increasing response
             times for larger keys which is expected. Also it is of interest to note the stability of the response times;
             the system looks to be working optimally without outside interference.
 
-            The distribution of percentiles at the 50-percentiles don't match for requests with 6 and 9 keys well. The
-            75-percentiles do on the other hand. This is an indication that the distribution has multiple peaks to
-            different degrees. This agrees with the histograms obtained (see figure \ref{fig:histogram_sharded_mw}).
-            Even though differently sized GET requests are not easily comparable their percentiles grow in a similar
-            fashion. This shows their distributions are all based on the same base model though.
+            It is surprising to observe that the 50-percentile is not representative of the average response time. The
+            75-percentile represents the value much closer. This signifies that there is a skew in the plot. This is
+            also visible in the histograms obtained for 6-keys (see figure \ref{fig:histogram_sharded_mw}).
+            % Even though differently sized GET requests are not easily comparable their percentiles grow in a similar
+            % fashion. This shows their distributions are all based on the same base model though.
 
             For all requests the queue in the middleware is almost always empty. This shows the middleware performing
             well in terms of request handling. The hypothesis is therefore the middleware must be spending lots of time
@@ -106,7 +106,11 @@
             follows in subsection \ref{subsec:5_summary}.\newline
             The throughput reported by the middleware in figure \ref{fig:shard_mw_tp} shows a downwards trend for
             requests processed. This is expected as even though fewer requests are made, the throughput in keys
-            requested increases.
+            requested increases. The resulting throughputs in keys are 2879, 6875, 8634 and 8786 keys respectively. The
+            trend downwards is in general hitting a floor due to GET requests being network bound on the side of
+            memcached (cf. \ref{tab:iperf}).
+            The response time matches quite well with the memcached response times. This indicates that the middleware
+            is easily able to send the requests.
 
     \subsection{Non-sharded Case\label{subsec:5_nonsharded}}
 
@@ -151,13 +155,15 @@
         \subsubsection{Explanation\label{subsubsec:5_nonsharded_summary}}
 
             The subfigures of figure \ref{fig:noshard_mt} show similar behaviour to the ones in figure
-            \ref{fig:shard_mt}.  Important differences are the decreased 50-percentile point for mutliGETs of size 9
+            \ref{fig:shard_mt}. Important differences are the decreased 50-percentile point for mutliGETs of size 9
             with higher response times for 6 and 9 keys in the high percentiles. This indicates that sharding helps
-            stabilize GET request variance at the cost of a higher average response time. This argument is strengthened
+            minimize GET request variance at the cost of a higher average response time. This argument is strengthened
             when comparing the average response times of figures \ref{fig:noshard_mt_rt} and \ref{fig:shard_mt_rt}. For
-            non-sharding the average response times are therefore lower (marginally for key sizes below 9) but higher
-            variances are to be expected. For both experiments the response time for keys of size 1 are virtually
-            identical. This is expected as sharding should not influence this metric.
+            non-sharding the average response times are therefore lower (about \SI{2}{\milli\second} for 9 keys and
+            about \SI{1}{\milli\second} for 6-keys) but higher variances are to be expected. For both experiments the
+            response time for keys of size 1 are virtually identical. It is noteworthy to state that the distribution
+            for 3-keys and 1-keys basically overlap. This seems to show a perfect scaling from GETs with 1 key to 3 keys
+            by the system.
 
             % The distribution of percentiles at the 50-percentile matches the average response time graph which is expected.
             % Even though differently sized GET requests are not easily comparable their percentiles grow in a similar
@@ -170,9 +176,13 @@
             compared in subsection \ref{subsec:5_summary}.\newline
             The reported throughput has a slightly stronger bent after 3 keys compared to sharded responses but overall
             the throughputs are comparable between sharded and non-sharded. A closer comparison shows the system
-            performing better for GETs with 3 keys and not using sharding (2543 [4] for non-sharded and 2291.64 [12]).
-            This reflects back in the percentiles. For the non-sharded case three keys behave extremely similar to a
-            single key, whereas this is not the case for the sharded case.
+            performing better for GETs with 3 keys and not using sharding (2543 for non-sharded and 2291.64 for
+            sharded). The respective keys exchanged are 2868, 7628, 8722, 8887. A higher throughput is achieved compared
+            to the sharded case. Lastly the latency is included which indicates a linear increase in latency from 3
+            \textendash{} 9 keys. This trend is reasonable insofar that the network bound is approached and data
+            expected to take longer to send.
+            Again the response time matches quite well with the memcached response times. This indicates that the
+            middleware is easily able to send the requests.
 
     \subsection{Histogram\label{subsec:5_histograms}}
 
@@ -196,51 +206,55 @@
                 \mw.\label{fig:histogram_nonsharded_nw}}
             \end{subfigure}
             \caption{Histograms of response times measured for sharded and non-sharded multiGETs of 6 keys. The
-                     distribution is based on GET requests and a bucket sizes of 0.1ms is used, with the last
-                     bucket accumulating all values $\geq19.9$ms.\label{fig:histograms}}
+                     distribution is based on GET requests and a bucket sizes of \SI{0.1}{\milli\second} is used, with the last
+                     bucket accumulating all values $\geq$ \SI{19.9}{\milli\second}. The histogram lacks error bars as
+                     the three repetitions' histogram results were extracted and seen as one graph. Thus no error bars
+                     are able to be display.\label{fig:histograms}}
         \end{figure*}
 
         The histograms show consistent behaviour between \srv{}s and \mw{}s; the response times are never smaller for
         \srv{}s than for \mw{}s and the shape measured being smoother on the middleware than on memtier follows from
-        a constant bucketing of 0.1ms on the middleware as opposed to memtier which accumulates responses beyond 10ms
-        into buckets of 1ms.
+        a constant bucketing of \SI{0.1}{\milli\second} on the middleware as opposed to memtier which accumulates
+        responses beyond \SI{10}{\milli\second} into buckets of \SI{1}{\milli\second}.
 
         The general shapes are similar between measurements at \mw{}s and \cli{}s for the case of sharded and
-        non-sharded multi-key GET requests. The plots for sharding have similar widths and magnitude on the main peak with
-        similar tails whereas for the non-sharded case the middleware's main peak is less pronounced compared to memtier
-        and slightly wider.
+        non-sharded multi-key GET requests. The peaks are much more pronounced on the middleware which makes sense as it
+        is closer to the clients and can process data quicker due to their multithreaded nature. The respective
+        memcached plots share similar peaks; the system can be seen as equally under load in both cases.
 
-        Noteworthy in figure \ref{fig:histogram_sharded_mw} is the second hill between 7.5\textendash10.0ms. It is
-        somewhat visible on the respective \srv{} measurement but doesn't exist for the non-sharded case. This behaviour
-        may be due to servers having a variable response time and with each sharded request convolving the expected
-        response times from each server for one third of the request size keys. As such the long responses are ``bundled
-        up'' and disappear from the observation and slow servers are only expected to send 2 and not 6 keys.
+        Noteworthy in figure \ref{fig:histogram_sharded_mw} is the presence of a second hill between
+        \SIrange{7.5}{10.0}{\milli\second}. It is somewhat visible on the respective \cli{} measurement but doesn't
+        exist for the non-sharded case. This behaviour may be due to servers having a variable response time and with
+        each sharded request convolving the expected response times from each server. This means there is a coupling of
+        all servers and thus a perturbation towards the tail's end is expected. Due to sharded requests being more
+        evenly distributed the tail must be shorter compared to the non-sharded case. The previous graphs on percentiles
+        reflect well on the distributions displayed. Similar behaviour is observed for the non-sharded graph.
 
         Additionally the histograms show very few outliers in the last bucket. The represented curves are therefore well
         suited to explain the distribution of response times.
 
         Lastly the previous claim of sharding increasing the response time yet stabilizing the variance shows well in
-        the plots. In general sharded results cut off earlier than the non-sharded counter-part.
+        the plots. In general sharded results cut off earlier than the non-sharded counter-part as can be seen when
+        looking at the tails of both experiments. In the non-sharded experiment a long thin tail is observed.
 
     \subsection{Summary\label{subsec:5_summary}}
 
         The question on how much sharding improves network performance is not easy to answer. Overall the throughput
-        stays mostly comparable for GETs with same key sizes.
+        stays mostly comparable for GETs with same key sizes (exclusion being 3-keys).
 
         The only measurable metric that may be of interest is the reduced response time for the non-sharded case. But
-        this only shows significantly for large keys. This seems to indicate that coordinating keys between three
-        \srv{}s is more cumbersome than just sending the request to one. Looking at how connection handling and
-        memcached communication is designed on the middleware it becomes clear that distributing the GET requests to the
-        servers is done quickly. Accepting replies and reassembling the responses is the bottleneck. Even though many
-        worker threads exist on the middleware each one handles network communication in a single-threaded approach. As
-        such responses begin to be serialized if they arrive simultaneously on the middleware (the thread can only
-        handle one connection at a time) and introduce the negative side-effect of requiring more state computations and
-        OS-based calls to access data on each of the sockets used for communication. As requests are also guaranteed to
-        be over the size of an MTU and the design of network communication returns once no new data is present in the
-        socket bad interleavings of accessing partially complete data on sockets introduce further overhead. This
-        overhead is not as strongly present for a single connection. Using a single connection introduces the issue of
-        two requests being sent to the same \srv{}. As such larger variation is expected as memcached is run single
-        threaded.
+        this only shows strongly for large keys. This seems to indicate that coordinating keys between three \srv{}s is
+        more cumbersome than just sending the request to one. Looking at how connection handling and memcached
+        communication is designed on the middleware it becomes clear that distributing the GET requests to the servers
+        is done quickly. Accepting replies and reassembling the responses is the bottleneck. Even though many worker
+        threads exist on the middleware each one handles network communication in a single-threaded approach. As such
+        responses begin to be serialized if they arrive simultaneously on the middleware (the thread can only handle one
+        connection at a time) and introduce the negative side-effect of requiring more state computations and OS-based
+        calls to access data on each of the sockets used for communication. As requests are also guaranteed to be over
+        the size of an MTU and the design of network communication returns once no new data is present in the socket bad
+        interleavings of accessing partially complete data on sockets introduce further overhead. This overhead is not
+        as strongly present for a single connection. Using a single connection introduces the issue of two requests
+        being sent to the same \srv{}. As such a larger variation is expected as memcached is run single threaded.
 
         In both cases there is a measurable increase in throughput for GET as key increase in size. It approaches the
         upload limit of all three servers. As such the distribution of requests follows a good pattern where the system
@@ -248,8 +262,8 @@
         way to increase performance for GET requests.
 
         The interactive law cannot be simply applied to the throughput numbers obtained in figures \ref{fig:shard_mw_tp}
-        and \ref{fig:noshard_mw_tp}. Calculating the response time it becomes apparent that the numbers don't match up.
-        This stems from the fact that only half the total requests are displayed. The graph only display GET requests,
-        not both, SET \& GET requests. As they are send in a 1:1 ratio though, simply by multiplying the amount of
-        requests for response time calculation gives a very good approximation of the average response time for GETs and
-        SETs. 
+        and \ref{fig:noshard_mw_tp}. Calculating the true response time it becomes apparent that the numbers don't match up.
+        This stems from the fact that only half the total requests are displayed and as discussed prior the thinking
+        time is missing. The graph only display GET requests, not both, SET \& GET requests. As they are send in a 1:1
+        ratio though, simply by multiplying the amount of requests for response time calculation gives a very good
+        approximation of the average response time for GETs and SETs.

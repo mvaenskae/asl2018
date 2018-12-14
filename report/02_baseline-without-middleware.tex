@@ -35,21 +35,30 @@
 
         \begin{figure*}
             \vspace*{-.5\baselineskip}
-                \centering
-            \begin{subfigure}[t!]{0.45\textwidth}
-                \centering
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_throughput.png}
-                \caption{Measured throughput on memtier.\label{fig:21_mt_tp}}
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_response_time.png}
-                \caption{Measured response time on memtier.\label{fig:21_mt_rt}}
-            \end{subfigure}
-            \begin{subfigure}[t!]{0.45\textwidth}
-                \centering
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_throughput-il.png}
-                \caption{Interactive Law \textendash{} Throughput.\label{fig:21_mt_tp_il}}
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_response-time-il.png}
-                \caption{Interactive Law \textendash{} Response Time.\label{fig:21_mt_rt_il}}
-            \end{subfigure}
+            \makebox[1\linewidth][c]{%
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_throughput.png}
+                    \caption{Measured throughput on memtier.\label{fig:21_mt_tp}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_response_time.png}
+                    \caption{Measured response time on memtier.\label{fig:21_mt_rt}}
+                \end{subfigure}
+            }
+            \makebox[1\linewidth][c]{%
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_throughput-il.png}
+                    \caption{Interactive Law \textendash{} Throughput.\label{fig:21_mt_tp_il}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-1_mt_response-time-il.png}
+                    \caption{Interactive Law \textendash{} Response Time.\label{fig:21_mt_rt_il}}
+                \end{subfigure}
+            }
             \caption{Memtier measurements for Experiment 2.1. Error bars are plotted but not visible due to being too
                      small.}
             \label{fig:21_all}
@@ -57,46 +66,58 @@
 
         \subsubsection{Explanation}
 
-            The memcached server is from the start saturated for GET requests as increasing the amount of
-            clients results in no gain of throughput. This behaviour is predicted by table \ref{tab:iperf_results}
-            where the theoretical limit is 3055 requests. As such the phase of under-saturation is not observed. The
-            system is at the very least saturated.  With the aforementioned 3055 requests a response time of 1.96ms
-            is expected for 6 clients. The measured data of 2.04ms [0.00] indicates a good degree of saturation but
-            a clear statement as to how saturated is not possible. Including the response time graph it becomes
-            clear that the system is still capable of handling more participants but the respective clients will
+            The memcached server is from the start saturated for GET requests as increasing the amount of clients
+            results in no gain of throughput. This behaviour is predicted by table \ref{tab:iperf_results} where the
+            theoretical limit is 3055 requests. As such the phase of under-saturation is not observed. The system is at
+            the very least saturated.  With the aforementioned 3055 requests a response time of \SI{1.96}{\milli\second}
+            is expected for 6 clients. The measured data of \SI{2.04}{\milli\second} indicates a good degree of
+            saturation but a clear statement as to how saturated is not possible. Including the response time graph it
+            becomes clear that the system is still capable of handling more participants but the respective clients will
             have slower response times.
 
             The memcached server behaves differently for SET requests. From a visual observation it seems to only
-            saturate at 192 clients with a throughput of roughly 16000 requests\textemdash performance degrades
-            thereafter. Response times scale for all points linearly and slowly; the system behaves well within
-            parameters and can still handle more clients. The throughput is trending down though for very many clients
-            and as such clients can expect slower response times from the system which reflect in smaller request
-            throughput. It is noteworthy to mention that for SET the theoretical limit has not been reached.
+            saturate at 192 clients with a throughput of 16334 requests\textemdash performance degrades thereafter.  As
+            the theoretical limit for three memtier instances should be 18233 keys it is interesting to observe only a
+            utilisation of 89\%. Observing dstat results shows the system reaching full saturation on the CPU end for
+            counts of 192 clients and beyond (in those cases the system is actually overloaded), meaning even though the
+            network still can accommodate requests the system is CPU bound. As such it is concluded that a single \srv{}
+            cannot handle more than 192 clients reasonably.
 
-            The interactive law holds as seen in figures \ref{fig:21_mt_tp_il} and \ref{fig:21_mt_rt_il}.
+            The interactive law without thinking time holds as seen in figures \ref{fig:21_mt_tp_il} and
+            \ref{fig:21_mt_rt_il}.
 
-            We conclude therefore that the bottleneck for memcached machines is the upload of data. The next
-            experiment will clarify the bottleneck for memtier machines.
+            We conclude therefore that the bottleneck for memcached machines is the upload of data for GET requests and
+            CPU performance for SET requests. The next experiment will clarify the bottleneck for memtier machines.
 
     \subsection{Two Servers\label{subsec:2_two-servers}}
 
         \begin{figure*}
             \vspace*{-.5\baselineskip}
                 \centering
-            \begin{subfigure}[t!]{0.45\textwidth}
-                \centering
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_throughput.png}
-                \caption{Measured throughput on memtier.\label{fig:22_mt_tp}}
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_response_time.png}
-                \caption{Measured response time on memtier.\label{fig:22_mt_rt}}
-            \end{subfigure}
-            \begin{subfigure}[t!]{0.45\textwidth}
-                \centering
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_throughput-il.png}
-                \caption{Interactive Law \textendash{} Throughput.\label{fig:22_mt_tp_il}}
-                \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_response-time-il.png}
-                \caption{Interactive Law \textendash{} Response Time.\label{fig:22_mt_rt_il}}
-            \end{subfigure}
+            \makebox[1\linewidth][c]{%
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_throughput.png}
+                    \caption{Measured throughput on memtier.\label{fig:22_mt_tp}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_response_time.png}
+                    \caption{Measured response time on memtier.\label{fig:22_mt_rt}}
+                \end{subfigure}
+            }
+            \makebox[1\linewidth][c]{%
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_throughput-il.png}
+                    \caption{Interactive Law \textendash{} Throughput.\label{fig:22_mt_tp_il}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/2-2_mt_response-time-il.png}
+                    \caption{Interactive Law \textendash{} Response Time.\label{fig:22_mt_rt_il}}
+                \end{subfigure}
+            }
             \caption{Memtier measurements for Experiment 2.2. Error bars are plotted but not visible due to being too
                      small.\label{fig:21_all}}
         \end{figure*}
@@ -142,12 +163,12 @@
                     \textbf{Experiment} & \textbf{Read-only workload} & \textbf{Write-only workload} &
                     \textbf{Configuration} \\
                     \midrule
-                    One \srv & 2637.75 [5.04]     & 16334.11 [35.27]    & Clients = 6 / 192 \\
-                    One \cli & 5816.28 [51.58]    & 5965.34 [5.92]      & Clients = 8 \\
+                    One \srv & 2937.75 & 16334.11 & Clients = 6 / 192 \\
+                    One \cli & 5816.28 & 5965.34  & Clients = 8 / 8 \\
                     \bottomrule
                 \end{tabular}
-                \caption{Evaluation of maximum throughputs of baseline experiment. In square brackets the standard
-                deviation is given, numbers are rounded to two significant figures.\label{tab:21_throughput}}
+                \caption{Evaluation of maximum throughputs of baseline experiment. Numbers are rounded to two
+                         digits.\label{tab:21_throughput}}
             }
         \end{table}
 
@@ -164,12 +185,6 @@
         In either case for the single memtier instance, an increase in steepness for the response time can be
         observed after the saturation point. The alignment of response times for both request types matches their
         respective throughput.
-
-        As the theoretical limit for three memtier instances should be 18233 keys it is interesting to observe only
-        a utilisation of 89\%. Observing dstat results shows the system reaching full saturation on the CPU end for
-        counts of 192 clients and beyond (in those cases the system is actually overloaded), meaning even though the
-        network still can accommodate requests the system is CPU bound. As such it is concluded that a single \srv{}
-        cannot handle more than 192 clients reasonably.
 
         The interactive law graphs align in all cases with the measured numbers and as such it can be deduced the
         thinking time is very close to 0 and all components introducing long response times are observable within this

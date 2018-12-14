@@ -1,9 +1,12 @@
 \section{2K Analysis (90 pts)\label{sec:6}}
 
-    In this section a 2k3 analysis is performed on throughput and response time for experimental parameters listed in
-    table \ref{tab:6_setup} using single keys for GET requests. In a 2k analysis factors are used as parameters
-    to infer system behaviour. Table \ref{tab:6_2k-factors} lists these factors and their interpretation as per sign
-    table.
+    In this section a 2k3 analysis (2k analysis with 3 repetitions) is performed on throughput and response time for
+    experimental parameters listed in table \ref{tab:6_setup} using single keys for GET requests. In a 2k analysis
+    factors are used as parameters to infer system behaviour. Table \ref{tab:6_2k-factors} lists these factors and their
+    interpretation as per sign table (this approach was chosen for the 2k analysis). It is important to note that as a
+    $2^k r$ experiment with $k = 3$ (3 factors observed) and $r = 3$ (three repetitions) that the data gets
+    appropriately normalized (multiplication by $\tfrac{1}{2^3}$) for the q-values obtained the sum of squares (SSQ) is
+    multiplied by $2^3 * 3$.
 
     \begin{table}
         \scriptsize{
@@ -41,9 +44,9 @@
 
     For 2k analysis two models exist, the additive and multiplicative one. Considering the factors to analyse, it
     becomes clear that increasing \textbf{A} and either \textbf{B} or \textbf{C}, an additive relationship exists
-    whereas increasing \textbf{B} and \textbf{C}, a multiplicative relationship exists (due to being bound together). A
-    mixed model would therefore be optimal. Due to an unavailability of one and with more factors being additive the
-    additive model is used for analysis.
+    whereas increasing \textbf{B} also modifies \textbf{C} (but not necessarily vice-versa\textemdash a
+    quasi-multiplicative relationship). A mixed model would therefore be optimal. Due to an unavailability of one and
+    with more factors being additive the additive model is used for analysis.
 
     \begin{table}
           \def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}%
@@ -58,22 +61,22 @@
                     & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{Variation} & 
                       \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{Variation} \\
                     \midrule
-                    q0            & 5694 & \textemdash & 44.1  & \textemdash \\
+                    q0            & 5695 & \textemdash & 44.1  & \textemdash \\
                     \addlinespace
-                    qA            & 2760 & 98.24\%     & -21.2 & 99.73\% \\
-                    qB            & 173  & 0.39\%      & -0.5  & 0.05\% \\
-                    qC            & 139  & 0.25\%      & -0.4  & 0.04\% \\
+                    qA            & 2760 & 98.24\%     & -21.3 & 99.73\% \\
+                    qB            & 173  & 0.38\%      & -0.5  & 0.05\% \\
+                    qC            & 138  & 0.25\%      & -0.4  & 0.04\% \\
                     \addlinespace
-                    qAB           & 174  & 0.39\%      & -0.5  & 0.06\% \\
-                    qAC           & 136  & 0.24\%      & -0.4  & 0.04\% \\
-                    qBC           & -136 & 0.24\%      & -0.4  & 0.04\% \\
+                    qAB           & 175  & 0.40\%      & -0.5  & 0.06\% \\
+                    qAC           & 137  & 0.24\%      & -0.4  & 0.04\% \\
+                    qBC           & -136 & 0.24\%      & 0.4  & 0.04\% \\
                     \addlinespace
-                    qABC          & -135 & 0.24\%      & 0.4   & 0.03\% \\
+                    qABC          & -136 & 0.24\%      & 0.4   & 0.03\% \\
                     \addlinespace
                     Error         & \textemdash & 0.01\% & \textemdash & 0.00\% \\
                     \bottomrule
                 \end{tabular}
-                \caption{2k3 factors for GET requests.\label{tab:6_get-factors}}
+                \caption{2k3 factors with variation for GET requests.\label{tab:6_get-factors}}
             \end{subfigure}
             \hspace{4em}
             \begin{subfigure}[t!]{0.45\textwidth}
@@ -85,24 +88,25 @@
                     & \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{Variation} & 
                       \multicolumn{1}{c}{Effect} & \multicolumn{1}{c}{Variation} \\
                     \midrule
-                    q0            & 7774 & \textemdash & 26.4 & \textemdash \\
+                    q0            & 7775 & \textemdash & 26.4 & \textemdash \\
                     \addlinespace
-                    qA            & -573 & 7.87\%      & 2.1  & 9.55\% \\
+                    qA            & -574 & 7.87\%      & 2.1  & 9.55\% \\
                     qB            & 1149 & 31.56\%     & -3.9 & 32.81\%\\
                     qC            & 1530 & 55.93\%     & -5.0 & 54.85\% \\
                     \addlinespace
                     qAB           & 171  & 0.70\%      & -1.0 & 2.41\% \\
                     qAC           & -177 & 0.75\%      & -0.0 & 0.00\% \\
-                    qBC           & 340  & 2.77\%      & 0.2  & 0.17\% \\
+                    qBC           & 341  & 2.77\%      & 0.3  & 0.17\% \\
                     \addlinespace
                     qABC          & 115  & 0.32\%      & -0.2 & 0.11\% \\
                     \addlinespace
                     Error         & \textemdash & 0.09\% & \textemdash & 0.10\% \\
                     \bottomrule
                 \end{tabular}
-                \caption{2k3 factors for SET requests.\label{tab:6_set-factors}}
+                \caption{2k3 factors with variation for SET requests.\label{tab:6_set-factors}}
             \end{subfigure}
-        \caption{2k3 factor analysis summaries for GET and SET requests.\label{tab:6_factor-analysis}}
+        \caption{2k3 factor analysis summaries for GET and SET requests. Numbers are rounded for throughput to integers,
+                 for latency to a single decimal.\label{tab:6_factor-analysis}}
         \vspace*{-0.75\baselineskip}
         }
     \end{table}
@@ -117,7 +121,8 @@
     throughput and response time (the latter omitted for behaving similar to the former) shows very consistent
     behaviour at either ends of the request throughputs on the residual plot. A few outliers are observed but these
     cannot be ruled out in a cloud environment. The QQ plot has a very shallow line in the center where the highest
-    likelihood of an observation is for a standard distribution. This shows a good fit of the additive model.
+    likelihood of an observation is for a standard distribution. This shows a good fit of the additive model and matches
+    observations from previous experiments.
 
     In the case of SET requests a mixture of factors \textbf{C} and \textbf{B} shows to be mostly significant with
     around 55.9\%/54.9\% and 31.6\%/32.8\% for throughput and response time respectively. Of minor significance yet
@@ -139,6 +144,10 @@
     distribution is uniform and seems to follow no trend. The numbers still show a trend but their expressiveness is
     uncertain.
 
+    As a closing remark on the analysis, a multiplicative model was also modelled yet similar results were obtained for
+    SET requests. This is to inform the reader that the multiplicative model is not a viable solution and not further
+    discussed.
+
     \begin{figure*}
         \vspace*{-.5\baselineskip}
             \centering
@@ -156,6 +165,6 @@
             \includegraphics[width=\textwidth]{../data_analysis/figures/6-0_throughput-get-qq.png}
             \caption{QQ-Plot for GET Throughput.\label{fig:6_qq_get_tp}}
         \end{subfigure}
-        \caption{Residual and QQ plots based on memtier measurements for Experiment 6.0. Throughput only plots
+        \caption{Residual and QQ plots based on memtier measurements for experiment 6.0. Only throughput plots
                  are depicted.\label{fig:6_tp}}
     \end{figure*}
