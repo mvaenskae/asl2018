@@ -106,3 +106,18 @@ class PathHelper:
         return {'exp_id': exp_id, 'subexp_id': subexp_id,
                 'wt': wt_count, 'ct': ct_count, 'vc': vc_count, 'rep': rep_count,
                 'hostname': hostname, 'type': type, 'memcached_server_count': memcached_server_count}
+
+
+    @staticmethod
+    def chdir_host(path, new_host):
+        exp_id = path.parts[-9]
+        subexp_id = path.parts[-8]
+        wt_count = path.parts[-7]
+        ct_count = path.parts[-6]
+        vc_count = path.parts[-5]
+        rep_count = path.parts[-4]
+        type = path.parts[-2]
+        memcached_server_count = path.parts[-1]
+
+        return PathHelper.home.joinpath(exp_id, subexp_id, wt_count, ct_count, vc_count, rep_count, new_host, type,
+                                        memcached_server_count)

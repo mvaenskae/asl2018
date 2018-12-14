@@ -2,6 +2,7 @@ import csv
 import math
 import re
 import subprocess
+from functools import reduce
 from itertools import islice
 
 from standard_lib import StdLib
@@ -402,12 +403,83 @@ class MiddlewareParser(Parser):
         new_clients = self.clients + other.clients
         new_set_observed = MiddlewareParser.dictionary_keywise_add(self.set_observed, other.set_observed)
         new_get_observed = MiddlewareParser.dictionary_keywise_add(self.get_observed, other.get_observed)
-        new_set_interactive = Parser.interactive_law_check(new_set_observed, new_clients)
-        new_get_interactive = Parser.interactive_law_check(new_get_observed, new_clients)
-        return MemtierParser(p.seconds, new_clients, new_set_observed, new_get_observed,
+        new_set_interactive = None
+        new_get_interactive = None
+        return MiddlewareParser(p.seconds, new_clients, new_set_observed, new_get_observed,
                              new_set_interactive, new_get_interactive,
                              p.set_histogram_percentage, p.get_histogram_percentage,
                              p.set_histogram_count, p.set_histogram_count)
+
+    @staticmethod
+    def interactive_law_fancy(observed, base_path, r_type, clients):
+        if observed['Response_Time'] is None or observed['Request_Throughput'] is None:
+            return {'Request_Throughput': None, 'Response_Time': None}
+        else:
+            path_information = PathHelper.interpret_path(base_path)
+            worker_threads = int(path_information['wt'])
+            if clients < worker_threads * 1.5:  # worker_threads > observed['Queue_Size']:  # clients < worker_threads * 1.5:
+                path_information = PathHelper.interpret_path(base_path)
+                client_pings = []
+                client_weights = []
+                for i in 'Client1', 'Client2', 'Client3':
+                    path = PathHelper.chdir_host(base_path, i)
+                    client_pings.append(PingParser.parse_file(path, path_information['hostname']))
+                    memtierparser = MemtierParser()
+                    memtierparser.parse_file(path, path_information['hostname'], False)
+                    if r_type == 'GET':
+                        client_weights.append(memtierparser.get_observed['Request_Throughput'])
+                    else:
+                        client_weights.append(memtierparser.set_observed['Request_Throughput'])
+
+                weighted_average_ping = sum(
+                    [ping * weight for ping, weight in zip(client_pings, client_weights)]) / sum(client_weights)
+                return {'Request_Throughput': observed['Request_Throughput'],
+                        'Response_Time': observed['Response_Time'] + 0.5 * weighted_average_ping}
+            else:
+                actives = clients if clients < worker_threads else worker_threads
+                return {'Request_Throughput': observed['Request_Throughput'],
+                        'Response_Time': 1000 * (actives + observed['Queue_Size']) / observed['Request_Throughput']}
+
+    @staticmethod
+    def interactive_law_simple(observed, clients, worker_threads):
+        if observed['Response_Time'] is None or observed['Request_Throughput'] is None:
+            return {'Request_Throughput': None, 'Response_Time': None}
+        else:
+            actives = clients if clients < worker_threads else worker_threads
+            return {'Request_Throughput': observed['Request_Throughput'],
+                    'Response_Time': 1000 * (actives + observed['Queue_Size']) / observed['Request_Throughput']}
+
+    @staticmethod
+    def interactive_law_queue(observed):
+        if observed['Response_Time'] is None or observed['Request_Throughput'] is None:
+            return {'Request_Throughput': None, 'Response_Time': None}
+        else:
+            active_clients = observed['Request_Throughput'] * (observed['Memcached_Communication'] / 1000) + observed['Queue_Size']
+            new_throughput = active_clients * 1000 / observed['Response_Time']
+            return {'Request_Throughput': new_throughput,
+                    'Response_Time': observed['Response_Time']}
+
+    @staticmethod
+    def interactive_law_ping(observed, base_path, r_type):
+        if observed['Response_Time'] is None or observed['Request_Throughput'] is None:
+            return {'Request_Throughput': None, 'Response_Time': None}
+        else:
+            path_information = PathHelper.interpret_path(base_path)
+            client_pings = []
+            client_weights = []
+            for i in 'Client1', 'Client2', 'Client3':
+                path = PathHelper.chdir_host(base_path, i)
+                client_pings.append(PingParser.parse_file(path, path_information['hostname']))
+                memtierparser = MemtierParser()
+                memtierparser.parse_file(path, path_information['hostname'], False)
+                if r_type == 'GET':
+                    client_weights.append(memtierparser.get_observed['Request_Throughput'])
+                else:
+                    client_weights.append(memtierparser.set_observed['Request_Throughput'])
+
+            weighted_average_ping = sum([ping*weight for ping, weight in zip(client_pings, client_weights)]) / sum(client_weights)
+            return {'Request_Throughput': observed['Request_Throughput'],
+                    'Response_Time': observed['Response_Time'] + 0.5 * weighted_average_ping}
 
     @staticmethod
     def dictionary_keywise_add(dict1, dict2):
@@ -415,17 +487,6 @@ class MiddlewareParser(Parser):
         for key in set(dict1):
             if dict1.get(key) is None:
                 result[key] = None
-
-        if 'Request_Throughput' in set(dict1):
-            keys_to_average = ['Response_Time', 'Queue_Size', 'RTT', 'Queue_Waiting_Time', 'Request_Size']
-            for key in keys_to_average:
-                if key in set(dict1):
-                    if dict1['Request_Throughput'] is None or dict1[key] is None:
-                        result[key] = None
-                    else:
-                        result[key] = StdLib.safe_div(((dict1['Request_Throughput'] * dict1[key]) +
-                                                       (dict2['Request_Throughput'] * dict2[key])),
-                                                      result['Request_Throughput'])
         return result
 
     def get_as_dict(self):
@@ -442,6 +503,7 @@ class MiddlewareParser(Parser):
 
     def parse_dir(self, path_to_dir, memtier_clients, histograms=False):
         path_information = PathHelper.interpret_path(path_to_dir)
+        # self.clients = int(path_information['wt'])
         self.clients = memtier_clients * int(path_information['vc']) * int(path_information['ct'])
 
         if path_information['type'] in ('GET', 'MULTIGET_1', 'SHARDED_1'):
@@ -466,11 +528,91 @@ class MiddlewareParser(Parser):
             else:
                 self.parse_histogram(path_to_dir, 'SET')
 
-        self.set_interactive = Parser.interactive_law_check(self.set_observed, self.clients)
-        self.get_interactive = Parser.interactive_law_check(self.get_observed, self.clients)
+        wt_results = []
+        for i in range(int(path_information['wt'])):
+            path_extra = f'{i:03}'
+            wt_parser = MiddlewareParser()
+            wt_parser.parse_thread(path_to_dir, histograms, path_extra)
+            wt_results.append(wt_parser)
 
-    def parse_table_with_queue(self, base_path, r_type, histogram):
+        all_gets = []
+        all_sets = []
+        for wt in wt_results:
+            get_tp = wt.get_observed['Request_Throughput']
+            set_tp = wt.set_observed['Request_Throughput']
+            all_gets.append(0 if get_tp is None else get_tp)
+            all_sets.append(0 if set_tp is None else set_tp)
+        sum_gets = sum(all_gets)
+        sum_sets = sum(all_sets)
+
+        for wt in wt_results:
+            wt.normalize('GET', sum_gets)
+            wt.normalize('SET', sum_sets)
+
+        recalculated_value = reduce(lambda item1, item2: item1 + item2, wt_results)
+
+        self.get_observed = recalculated_value.get_observed
+        self.set_observed = recalculated_value.set_observed
+        self.get_histogram_count = recalculated_value.get_histogram_count
+        self.set_histogram_count = recalculated_value.set_histogram_count
+
+        #self.set_interactive = MiddlewareParser.interactive_law_queue(self.set_observed)
+        #self.get_interactive = MiddlewareParser.interactive_law_queue(self.get_observed)
+        self.set_interactive = MiddlewareParser.interactive_law_ping(self.set_observed, path_to_dir, 'SET')
+        self.get_interactive = MiddlewareParser.interactive_law_ping(self.get_observed, path_to_dir, 'GET')
+        #self.set_interactive = MiddlewareParser.interactive_law_simple(self.set_observed, self.clients, int(path_information['wt']))
+        #self.get_interactive = MiddlewareParser.interactive_law_simple(self.get_observed, self.clients, int(path_information['wt']))
+        #self.set_interactive = MiddlewareParser.interactive_law_fancy(self.set_observed, path_to_dir, 'SET', self.clients)
+        #self.get_interactive = MiddlewareParser.interactive_law_fancy(self.get_observed, path_to_dir, 'GET', self.clients)
+
+
+    def normalize(self, entry, factor):
+        if entry == 'Histogram_GET':
+            print("Not implemented")
+        if entry == 'Histogram_SET':
+            print("Not implemented")
+        if entry == 'GET':
+            if self.get_observed['Request_Throughput'] is not None:
+                for i in ['Key_Throughput', 'Request_Size', 'Queue_Waiting_Time', 'Memcached_Communication', 'Response_Time', 'Queue_Size']:
+                    if i in self.get_observed:
+                        self.get_observed[i] = self.get_observed[i] * self.get_observed['Request_Throughput'] / factor
+        if entry == 'SET':
+            if self.set_observed['Request_Throughput'] is not None:
+                for i in ['Queue_Waiting_Time', 'Memcached_Communication', 'Response_Time', 'Queue_Size']:
+                    if i in self.set_observed:
+                        self.set_observed[i] = self.set_observed[i] * self.set_observed['Request_Throughput'] / factor
+
+
+    def parse_thread(self, path_to_dir, histograms, wt_dir):
+        path_information = PathHelper.interpret_path(path_to_dir)
+
+        if path_information['type'] in ('GET', 'MULTIGET_1', 'SHARDED_1'):
+            self.parse_table_with_queue(path_to_dir, 'GET', histograms, wt_dir)
+            if histograms:
+                self.parse_histogram(path_to_dir, 'GET', wt_dir)
+            if path_information['type'] != 'GET':
+                self.parse_table_with_queue(path_to_dir, 'SET', histograms, wt_dir)
+                if histograms:
+                    self.parse_histogram(path_to_dir, 'SET', wt_dir)
+        elif path_information['type'] in ('MULTIGET_3', 'MULTIGET_6', 'MULTIGET_9', 'SHARDED_3', 'SHARDED_6', 'SHARDED_9'):
+            self.parse_table_with_queue(path_to_dir, 'MULTIGET', histograms, wt_dir)
+            self.parse_table_with_queue(path_to_dir, 'SET', histograms, wt_dir)
+            if histograms:
+                self.parse_histogram(path_to_dir, 'MULTIGET', wt_dir)
+                self.parse_histogram(path_to_dir, 'SET', wt_dir)
+        else:
+            self.parse_table_with_queue(path_to_dir, 'SET', histograms, wt_dir)
+            if histograms:
+                self.parse_histogram(path_to_dir, 'SET', wt_dir)
+
+        self.set_interactive = MiddlewareParser.interactive_law_ping(self.set_observed, path_to_dir, 'SET')
+        self.get_interactive = MiddlewareParser.interactive_law_ping(self.get_observed, path_to_dir, 'GET')
+
+
+    def parse_table_with_queue(self, base_path, r_type, histogram, specific_wt=None):
         mw_path = base_path.joinpath('mw-stats')
+        if specific_wt is not None:
+            mw_path = mw_path.joinpath(specific_wt)
         queue_file = mw_path.joinpath('queue_statistics.txt')
         if r_type == 'GET':
             table_csv = mw_path.joinpath('get_table.csv')
@@ -482,6 +624,9 @@ class MiddlewareParser(Parser):
         table_rows = MiddlewareParser.csv_parsing(table_csv, histogram, delimiter=',', has_header=True)
         self.seconds = len(table_rows)
 
+        if specific_wt is not None:
+            mw_path = mw_path.parent
+            queue_file = mw_path.joinpath('queue_statistics.txt')
         queue_rows = MiddlewareParser.csv_parsing(queue_file, histogram)
         _, queue_average = map(lambda x: x / self.seconds, [sum(x) for x in zip(*queue_rows)])
 
@@ -497,8 +642,10 @@ class MiddlewareParser(Parser):
             self.get_observed['Queue_Size'] = queue_average
             self.get_observed['Key_Distribution'] = tuple(key_distribution.split())
 
-    def parse_histogram(self, base_path, r_type):
+    def parse_histogram(self, base_path, r_type, wt_path=None):
         mw_path = base_path.joinpath('mw-stats')
+        if wt_path is not None:
+            mw_path = mw_path.joinpath(wt_path)
         if r_type == 'GET':
             histogram_filepath = mw_path.joinpath('get_histogram.txt')
             total_ops = self.get_observed['Request_Throughput'] * self.seconds
@@ -519,7 +666,6 @@ class MiddlewareParser(Parser):
         else:
             self.get_histogram_percentage = histogram
             self.get_histogram_count = histogram_counts
-
 
     @staticmethod
     def csv_parsing(csv_file, histogram, delimiter=' ', has_header=False):
@@ -610,3 +756,25 @@ class MiddlewareParser(Parser):
         result[last_bucket] += sum_beyond_range
 
         return result
+
+
+class PingParser:
+
+    @staticmethod
+    def parse_file(base_path, ping_target):
+        ping_history = []
+        filename = base_path.joinpath(ping_target + ".ping")
+        # Read in all lines
+        with open(filename, "r") as file:
+            for line in file:
+                splits = line.split('=')
+                if len(splits) > 3:
+                    ping_info = splits[3].split()
+                    if ping_info[1] == 'ms':
+                        ping_history.append(StdLib.get_sane_double(ping_info[0]))
+                    elif ping_info[1] == 's':
+                        ping_history.append(1000 * StdLib.get_sane_double(ping_info[0]))
+                    else:
+                        print("Unexpected unit, got value {} {}", ping_info[0], ping_info[1])
+
+        return sum(ping_history) / len(ping_history)
