@@ -45,7 +45,7 @@
   <!-- Compilation target -->
   <target name="compile" depends="init" description="compile the source">
     <!-- Compile the java code from ${src} into ${build} -->
-    <javac srcdir="${src.dir}" destdir="${build.dir}" includeantruntime="true" classpathref="deps.path" release="8"/>
+    <javac srcdir="${src.dir}" destdir="${build.dir}" includeantruntime="true" classpathref="deps.path"/>
     <copy todir="${build.dir}">
       <fileset dir="${lib.dir}" excludes="**/*.jar"/>
     </copy>

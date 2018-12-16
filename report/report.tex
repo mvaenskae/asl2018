@@ -17,10 +17,10 @@
 \fancypagestyle{firstpagefooter} {
     \lfoot{\tiny{Version: \today}}
     \cfoot{}
-    \rfoot{\thepage}
+    \rfoot{}
 }
 
-\lfoot{Name: Mickey Vänskä Legi: 10-930-386}
+\lfoot{Mickey Vänskä (10-930-386)}
 \rfoot{\thepage}
 
 \newcommand{\srv}{\emph{Server}}
@@ -51,6 +51,7 @@
     \thispagestyle{firstpagefooter}
 
     \newpage
+    \setcounter{page}{1}
 
     \input{01_system-overview}
     \input{02_baseline-without-middleware}

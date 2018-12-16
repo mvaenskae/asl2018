@@ -6,7 +6,7 @@ class ExperimentDefinitions:
     Helper class which holds constant definitions for the experimental parameters for each experiment
     """
 
-    log_base = pathlib.Path.home().joinpath("ASL_RESULTS")
+    log_base = pathlib.Path.home().joinpath("asl-logs-mickeyv")
     repetitions = [1, 2, 3]
 
     @staticmethod

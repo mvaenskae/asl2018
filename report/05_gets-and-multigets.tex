@@ -23,7 +23,7 @@
     performance impacts possible due to too little threading on the middleware.
 
     Important in this section's data is the exclusion of the \SI{60}{\second} stable-phase window as histograms are
-    used. Memtier reports histograms for the complete run and not a configurable stable window this decision was made
+    used. Memtier reports histograms for the complete run and not a configurable stable window. This decision was made
     to allow comparing not only data from the middleware and memtier but also relate it to histograms.
 
     \begin{table}
@@ -108,7 +108,7 @@
             requests processed. This is expected as even though fewer requests are made, the throughput in keys
             requested increases. The resulting throughputs in keys are 2879, 6875, 8634 and 8786 keys respectively. The
             trend downwards is in general hitting a floor due to GET requests being network bound on the side of
-            memcached (cf. \ref{tab:iperf}).
+            memcached (cf. table \ref{tab:iperf_results}).
             The response time matches quite well with the memcached response times. This indicates that the middleware
             is easily able to send the requests.
 
@@ -163,7 +163,7 @@
             about \SI{1}{\milli\second} for 6-keys) but higher variances are to be expected. For both experiments the
             response time for keys of size 1 are virtually identical. It is noteworthy to state that the distribution
             for 3-keys and 1-keys basically overlap. This seems to show a perfect scaling from GETs with 1 key to 3 keys
-            by the system.
+            by the system in the case of not sharding.
 
             % The distribution of percentiles at the 50-percentile matches the average response time graph which is expected.
             % Even though differently sized GET requests are not easily comparable their percentiles grow in a similar
@@ -176,7 +176,7 @@
             compared in subsection \ref{subsec:5_summary}.\newline
             The reported throughput has a slightly stronger bent after 3 keys compared to sharded responses but overall
             the throughputs are comparable between sharded and non-sharded. A closer comparison shows the system
-            performing better for GETs with 3 keys and not using sharding (2543 for non-sharded and 2291.64 for
+            performing better for GETs with 3 keys and not using sharding (2543 for non-sharded and 2292 for
             sharded). The respective keys exchanged are 2868, 7628, 8722, 8887. A higher throughput is achieved compared
             to the sharded case. Lastly the latency is included which indicates a linear increase in latency from 3
             \textendash{} 9 keys. This trend is reasonable insofar that the network bound is approached and data
@@ -215,15 +215,16 @@
         The histograms show consistent behaviour between \srv{}s and \mw{}s; the response times are never smaller for
         \srv{}s than for \mw{}s and the shape measured being smoother on the middleware than on memtier follows from
         a constant bucketing of \SI{0.1}{\milli\second} on the middleware as opposed to memtier which accumulates
-        responses beyond \SI{10}{\milli\second} into buckets of \SI{1}{\milli\second}.
+        responses beyond \SI{10}{\milli\second} into buckets of \SI{1}{\milli\second}. As such they appear more coarse
+        after \SI{10}{\milli\second}.
 
         The general shapes are similar between measurements at \mw{}s and \cli{}s for the case of sharded and
         non-sharded multi-key GET requests. The peaks are much more pronounced on the middleware which makes sense as it
         is closer to the clients and can process data quicker due to their multithreaded nature. The respective
         memcached plots share similar peaks; the system can be seen as equally under load in both cases.
 
-        Noteworthy in figure \ref{fig:histogram_sharded_mw} is the presence of a second hill between
-        \SIrange{7.5}{10.0}{\milli\second}. It is somewhat visible on the respective \cli{} measurement but doesn't
+        Noteworthy in figure \ref{fig:histogram_sharded_mw} is the presence of a small yet measureable second hill
+        between \SIrange{7.5}{10.0}{\milli\second}. It is also visible on the respective \cli{} measurement but doesn't
         exist for the non-sharded case. This behaviour may be due to servers having a variable response time and with
         each sharded request convolving the expected response times from each server. This means there is a coupling of
         all servers and thus a perturbation towards the tail's end is expected. Due to sharded requests being more
@@ -255,6 +256,10 @@
         interleavings of accessing partially complete data on sockets introduce further overhead. This overhead is not
         as strongly present for a single connection. Using a single connection introduces the issue of two requests
         being sent to the same \srv{}. As such a larger variation is expected as memcached is run single threaded.
+
+        In short it is therefore when expecting averages to be low sensible to not use sharding but enabling it when
+        more consistent response times are requested for increasing key sizes. For 3 keys in a GET the favourite is to
+        not enable sharding.
 
         In both cases there is a measurable increase in throughput for GET as key increase in size. It approaches the
         upload limit of all three servers. As such the distribution of requests follows a good pattern where the system

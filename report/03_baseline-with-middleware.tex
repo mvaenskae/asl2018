@@ -64,6 +64,12 @@
                     \includegraphics[width=1\textwidth]{../data_analysis/figures/3-1_mw_response_time.png}
                     \caption{Response times.\label{fig:single_mw_rt}}
                 \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/3-1_mw_throughput-il.png}
+                    \caption{Throughput calculation using the interactive law with an adjusted client
+                             count.\label{fig:single_mw_tp-il}}
+                \end{subfigure}
             }
             \caption{\mw{} statistics based on SET and GET requests for various amounts of worker threads and active
                      clients.\label{fig:single_mw_all}}
@@ -76,8 +82,8 @@
             The throughput of SET requests behaves most similarly to the baseline with 64 worker threads yet the
             throughput for 32 worker threads is in general higher for 48 and 96 connected clients. This observation will
             be discussed in the following paragraphs and explained with more data. It can be inferred that the
-            throughput of a single client is limited around 11546 requests, a contrast to the measured 16334 without the
-            use of a middleware. This limit occurs for 192 virtual clients. The throughput being lower for fewer worker
+            throughput of a single client is limited to 11546 requests, a contrast to the measured 16334 without the use
+            of a middleware. This limit occurs for 192 virtual clients. The throughput being lower for fewer worker
             threads is reasonable and the non-linear scaling highly likely due to the fact that \mw{}s have only 8
             physical cores.
 
@@ -97,10 +103,10 @@
             communication time with memcached.
 
             Coming back to the open question of why 32 worker threads perform better than 64 for 48 and 96 clients
-            requires the use of the queue where requests are stored. As long as this queue is not always at least the
-            size of worker threads performance impact can be expected due to worker threads being idle and waiting for a
-            new request to process. This results in an effectively smaller throughput as only some threads are working
-            but the threads waiting for a new element contend on a shared lock on the queue. Only once the queue at 192
+            requires the use of the queue where requests are stored. As long as this queue is not at least the size of
+            worker threads, performance impact can be expected due to worker threads being idle and waiting for a new
+            request to process. This results in an effectively smaller throughput as only some threads are working but
+            the threads waiting for a new element contend on a shared lock on the queue. Only once the queue at 192
             clients approaches 64 elements does the middleware become more saturated and is even more so at 288 clients.
             It is very close to the point of complete saturation when looking at the queue size, yet no real increase in
             throughput was measured. As the standard deviation for 288 clients and 64 worker threads is rather large
@@ -110,18 +116,19 @@
             Overall it can be concluded that for 8\textendash 32 clients the maximal saturation point has been reached
             and for 64 threads the saturation point is within a few percent or has been reached.
 
-            A note on the large range for the memcached handling time at 12 total clients, 64 worker threads using SET
-            operations: Confirming with dstat logs it shows that performance decreases are observed on all connected
-            machines for the timestamp 03:09:23 (on the second repetition). This is with high probability an artifact of
-            running in a cloud environment where either an elephant flow was started or the machine migrated from one
-            rack to another. This was discovered after the machines have been turned off and a repetition for a single
-            data point deemed too costly. This outlier is less visible in the response time graphs as they scale
-            differently. Other outliers are not noteworthy to discuss.
+            % A note on the large range for the memcached handling time at 12 total clients, 64 worker threads using SET
+            % operations: Confirming with dstat logs it shows that performance decreases are observed on all connected
+            % machines for the timestamp 03:09:23 (on the second repetition). This is with high probability an artifact of
+            % running in a cloud environment where either an elephant flow was started or the machine migrated from one
+            % rack to another. This was discovered after the machines have been turned off and a repetition for a single
+            % data point deemed too costly. This outlier is less visible in the response time graphs as they scale
+            % differently. Other outliers are not noteworthy to discuss.
 
     \subsection{Two Middlewares\label{subsec:3_two-middlewares}}
 
         This experiment is virtually identical to the previous experiment with the change of each \srv{} running two
-        single-threaded memtier instances where the second connects to the newly added second \mw{}.
+        single-threaded memtier instances where the second connects to the newly added second \mw{}. As such each \mw{}
+        is only subject to half the load compared to the previous experiment's single \mw{}.
 
         \begin{figure*}
             \vspace*{-.5\baselineskip}
@@ -158,6 +165,12 @@
                     \includegraphics[width=1\textwidth]{../data_analysis/figures/3-2_mw_response_time.png}
                     \caption{Response times.\label{fig:double_mw_rt}}
                 \end{subfigure}
+                \begin{subfigure}[t!]{0.55\textwidth}
+                    \centering
+                    \includegraphics[width=1\textwidth]{../data_analysis/figures/3-2_mw_throughput-il.png}
+                    \caption{Throughput calculation using the interactive law with an adjusted client
+                             count.\label{fig:double_mw_tp-il}}
+                \end{subfigure}
             }
             \caption{\mw{} statistics based on SET and GET requests for various amounts of worker threads and active
                      clients.\label{fig:double_mw_all}}
@@ -190,9 +203,9 @@
             worker threads shows that this experiment as well shows saturation points for 8\textendash 32 worker threads
             and being very close to the saturation point of 64 worker threads.
 
-            Another artifact of running in a cloud environment can be seen for 6 clients and 32 worker threads where the
+            An artifact of running in a cloud environment can be seen for 6 clients and 32 worker threads where the
             throughput is low and the response time including memcached communication unexpectedly high. Looking at the
-            respective logs shows a likely network issue, again on the second run, as no system is overtaxed yet the
+            respective logs shows a likely network issue on the second run, as no system is overtaxed yet the
             \srv{} is not sending enough data. Statistics generated by ping indicate unusually high response times for
             communication between \mw{}s and the single \srv{}. This reflects in the memcached communication time and
             response time of the system. The system is for most of the supposedly stable window overall very shaky.
@@ -212,7 +225,7 @@
                 Type  & Machine & Exp 3.1  & Exp 3.2  & Exp 3.1 & Exp 3.2 & Exp 3.1 & Exp 3.2 & Exp 3.1 & Exp 3.2 \\
                 \midrule
                 GET      & \cli & 2936.83  & 2923.78  & 65.32 & 65.92 & N/A   & N/A   & 0.00 & 0.00 \\
-                         & \mw  & 2939.61  & 2929.16  & 64.17 & 69.02 & 42.17 & 20.27 & 0.00 & 0.00 \\
+                         & \mw  & 2939.61  & 2929.16  & 64.17 & 69.02 & 42.17 & 20.60 & 0.00 & 0.00 \\
                 \addlinespace
                 SET      & \cli & 11549.70 & 15308.52 & 16.73 & 12.55 & N/A   & N/A   & N/A  & N/A \\
                          & \mw  & 11546.60 & 15312.49 & 8.07  & 11.29 & 3.80  & 3.01  & N/A  & N/A \\
@@ -252,7 +265,7 @@
         certain amount of active clients. The trend is that more worker threads can handle more clients but the time to
         process grows. This aligns well with the fact that there is contention for the actual cores of the machine by
         each worker thread. A detailed explanation on the respective behaviour has been given in
-        subsubsection \ref{subsubsec:3_one-middleware}. The queue sizes also reflect in the queue waiting times
+        subsubsection \ref{subsubsec:3_one-middleware_summary}. The queue sizes also reflect in the queue waiting times
         appropriately for both experiments in this section. Additionally the queue sizes offer a good metric in
         evaluating the saturation of the system and aid in defining the maximum throughput for each configuration of
         worker threads. Once the queue sizes reaches the amount of worker threads there is no more more waiting on the
@@ -283,22 +296,29 @@
 
         $$ R = \frac{N}{X} - Z $$
 
-        allows the modification of either $N$ (number of active clients) or the inclusion of $Z$ (the thinking time).
-        Including $Z$ is usually done by the inclusion of the RTT between \srv{} and \mw{}. To adjust $N$ it is relevant
-        to define what the number of actual jobs are in the current system. This can be modelled to various degrees of
-        complexity but an intuitive approach is the following:
-
+        allows the modification of either $N$ (number of active clients) or setting $Z$ (the thinking time) to a
+        non-zero value. The latter is usually done by using the RTT between \srv{} and \mw{} (and add some minimal extra to
+        allow memtier processing time). To adjust $N$ it is relevant
+        to define what the number of actual jobs are in the current system. This is defined by two components, the queue
+        of the system modelling inactive jobs still to be processed and the active participants which are inferred from
+        the system throughput and memcached communication time. Multiplying the throughput of the system with the time
+        it takes for workers to have completely handled communication with memcached gives a good amount of active
+        workers. Adding these two together and dividing by the observed response time of the middleware gives a
+        prediction of the throughput on the system in relation to active participants.
         $$
-        N =
-        \begin{cases}
-            \text{Size\textsubscript{Queue}} + \text{Worker Threads}   & \quad \text{if Worker Threads > Clients} \\
-            \text{Size\textsubscript{Queue}} + \text{Clients}          & \quad \text{otherwise}
-        \end{cases}
+        X_{pred} = \frac{X * \text{Time\textsubscript{Memcached}} +
+                   \text{Size\textsubscript{Queue}}}{\text{Time\textsubscript{Middleware}}}
+        % \begin{cases}
+        %     \text{Size\textsubscript{Queue}} + \text{Clients}   & \quad \text{if Worker Threads > Clients} \\
+        %     \text{Size\textsubscript{Queue}} + \text{Worker Threads}          & \quad \text{otherwise}
+        % \end{cases}
         $$
-
         In the following the interactive law is applied and the response time derived using the latency from each
-        experiment. In general the interactive law holds, some outliers are expected for high loads graceful failures
-        are not the nature of computers.
+        experiment. Figures \ref{fig:single_mw_tp-il} and \ref{fig:double_mw_tp-il} depict the interactive law applied
+        with a modified amount of clients and in figure \ref{fig:3_il} the application of the thinking time is compared
+        to with measurements from memcached. In general the interactive law holds in both cases but the throughput
+        calculation shows cleaner results and is thusly used onwards. Some outliers are expected for high loads as
+        graceful failures are not the nature of computers.
 
         \begin{figure*}
             \vspace*{-.5\baselineskip}

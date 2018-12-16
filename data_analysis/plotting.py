@@ -62,6 +62,7 @@ class PlottingFunctions:
                                                                    xlim=xlim, ylim=ylim)
         if xticks is not None:
             plt.xticks(*xticks)
+
         if save_as_filename is None:
             plt.show()
         else:
@@ -72,6 +73,7 @@ class PlottingFunctions:
                 x=None, y=None,
                 xlabel=None, ylabel=None):
         sns.residplot(x, y, dataframe).set(xlabel=xlabel, ylabel=ylabel, title=experiment_title)
+
         if save_as_filename is None:
             plt.show()
         else:
@@ -82,6 +84,7 @@ class PlottingFunctions:
                x=None, fit_line=False):
         stats.probplot(dataframe[x], dist="norm", fit=fit_line, plot=plt)
         plt.title(experiment_title)
+
         if save_as_filename is None:
             plt.show()
         else:
@@ -928,7 +931,6 @@ class ExperimentPlotter:
         # Will hold an unrolled view of buckets, meaning if a bucket held N times, the bucket's label will be present N
         # times
         histogram = pd.DataFrame(occurrence_list)
-        print(histogram.describe())
 
         if plot:
             plot_base = "{}-{}_".format(subexperiment['experiment_id'], subexperiment['subexperiment_id'])
@@ -1004,7 +1006,7 @@ class ExperimentPlotter:
         print("====================\n\n")
 
     @staticmethod
-    def exp_6_pretty_table(exp_list, plot=False, multiplicative_model=False):
+    def exp_6_pretty_table(exp_list, plot=True, multiplicative_model=False):
         exp_tables = []
         exp_tables_readable = []
         for key, value in exp_list:
@@ -1223,6 +1225,7 @@ class ExperimentPlotter:
         muh_results = maximum_service_rate_df[['Worker_Threads', 'Maximum_Service_Rate']]
         lambs = ExperimentPlotter.middleware_statistics_request_family(data[0], ExperimentDefinitions.subexpriment_40(),
                                                                        plot=False)
+        lambs = lambs[~lambs.Type.str.contains('Interactive')]
         analysis_table = pd.DataFrame.merge(lambs, muh_results, on=['Worker_Threads'])
         mm1_results = StatisticsFunctions.mm1(analysis_table, plot=to_plot)
         mmm_results = StatisticsFunctions.mmm(analysis_table, plot=to_plot)
@@ -1252,11 +1255,11 @@ if __name__ == '__main__':
     pd.set_option('display.max_colwidth', 1920)
     # plt.rcParams["figure.figsize"] = [16, 9]
 
-    figures_wanted = True
+    figures_wanted = False
 
-    # ExperimentPlotter.experiment_2(figures_wanted)
-    # ExperimentPlotter.experiment_3(figures_wanted)
-    # ExperimentPlotter.experiment_4(figures_wanted)
-    # ExperimentPlotter.experiment_5(figures_wanted)
+    ExperimentPlotter.experiment_2(figures_wanted)
+    ExperimentPlotter.experiment_3(figures_wanted)
+    ExperimentPlotter.experiment_4(figures_wanted)
+    ExperimentPlotter.experiment_5(figures_wanted)
     ExperimentPlotter.experiment_6(figures_wanted)
-    # ExperimentPlotter.experiment_7(figures_wanted)
+    ExperimentPlotter.experiment_7(figures_wanted)

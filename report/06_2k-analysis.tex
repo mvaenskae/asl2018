@@ -3,10 +3,10 @@
     In this section a 2k3 analysis (2k analysis with 3 repetitions) is performed on throughput and response time for
     experimental parameters listed in table \ref{tab:6_setup} using single keys for GET requests. In a 2k analysis
     factors are used as parameters to infer system behaviour. Table \ref{tab:6_2k-factors} lists these factors and their
-    interpretation as per sign table (this approach was chosen for the 2k analysis). It is important to note that as a
-    $2^k r$ experiment with $k = 3$ (3 factors observed) and $r = 3$ (three repetitions) that the data gets
-    appropriately normalized (multiplication by $\tfrac{1}{2^3}$) for the q-values obtained the sum of squares (SSQ) is
-    multiplied by $2^3 * 3$.
+    interpretation as per sign table (this approach was chosen for the 2k analysis). It is important to note that for a
+    $2^k r$ experiment with $k = 3$ (3 factors observed) and $r = 3$ (three repetitions) the data gets appropriately
+    normalized for the calculation of the q-values (multiplication by $\tfrac{1}{2^3}$) and the sum of squares (SSQ) is
+    multiplied by $2^3 * 3$ to be able to infer the variation explained.
 
     \begin{table}
         \scriptsize{
@@ -45,8 +45,10 @@
     For 2k analysis two models exist, the additive and multiplicative one. Considering the factors to analyse, it
     becomes clear that increasing \textbf{A} and either \textbf{B} or \textbf{C}, an additive relationship exists
     whereas increasing \textbf{B} also modifies \textbf{C} (but not necessarily vice-versa\textemdash a
-    quasi-multiplicative relationship). A mixed model would therefore be optimal. Due to an unavailability of one and
-    with more factors being additive the additive model is used for analysis.
+    quasi-multiplicative relationship). A mixed model would therefore be optimal under these considerations. Looking at
+    the expected data and including the strength of the multiplicative model for expected values $y$ to exist only for
+    a large enough threshold of $\tfrac{y_{max}}{y_{min}}$ it is reasonable to evaluate the system with an additive
+    model.
 
     \begin{table}
           \def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}%
@@ -121,8 +123,11 @@
     throughput and response time (the latter omitted for behaving similar to the former) shows very consistent
     behaviour at either ends of the request throughputs on the residual plot. A few outliers are observed but these
     cannot be ruled out in a cloud environment. The QQ plot has a very shallow line in the center where the highest
-    likelihood of an observation is for a standard distribution. This shows a good fit of the additive model and matches
-    observations from previous experiments.
+    likelihood of an observation is for a standard distribution. Both of these plots show an insufficient model
+    according to the book referenced in the lecture (Box 18.1) and a multiplicative model is recommended to be observed.
+    After evaluating that model no reasonable gains were able to be found and the resulting plots are apart from a change
+    of axis labels very similar. Even though the results indicate problems, when including the real system behaviour,
+    both numbers make sense and are not only verified by the 2k3 analysis but also empirically to correlate.
 
     In the case of SET requests a mixture of factors \textbf{C} and \textbf{B} shows to be mostly significant with
     around 55.9\%/54.9\% and 31.6\%/32.8\% for throughput and response time respectively. Of minor significance yet
@@ -138,15 +143,12 @@
     from one to three and a decrease in throughput is observed. The factor proposes an increase in \srv{}s introduces a
     negative effect as the \mw{} is designed to share the SET operation with each \srv{} in the system. This key
     distribution introduces additional latencies into the system. Again residual (figure \ref{fig:6_r_set_tp}) and QQ
-    plots (figure \ref{fig:6_qq_set_tp} were created but only the throughput ones are presented (similar behaviour in
+    plots (figure \ref{fig:6_qq_set_tp}) were created but only the throughput ones are presented (similar behaviour in
     either case). The residuals are scattered without anything being possible to interpret and the QQ plot shows a
-    quasi-linear behaviour. It can be concluded that the additive model is insufficient to model the behaviour as the
-    distribution is uniform and seems to follow no trend. The numbers still show a trend but their expressiveness is
-    uncertain.
-
-    As a closing remark on the analysis, a multiplicative model was also modelled yet similar results were obtained for
-    SET requests. This is to inform the reader that the multiplicative model is not a viable solution and not further
-    discussed.
+    quasi-linear behaviour. Both great signs according to the book as the residual error must be IID and small (it is
+    smaller by a magnitude than the x-labels) and the distribution of errors being uniform at random. As such the model
+    should be good enough to describe system performance per the book. Given empirical data the trend is clearly visible
+    and overlaps but the strength of individual components is questioned to be correct.
 
     \begin{figure*}
         \vspace*{-.5\baselineskip}

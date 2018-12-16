@@ -200,35 +200,31 @@ class MemtierCollector(DataCollector):
                                               'Seconds': mt_dict['Seconds']}
 
                                 if req is 'GET':
-                                    for key, value in mt_dict['GET_Histogram_Percentage'].items():
+                                    for key, value in mt_dict['GET_Histogram_Count'].items():
                                         row_copy = single_row.copy()
                                         row_copy['Bucket'] = key
-                                        row_copy['Percentage'] = value
-                                        row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
+                                        row_copy['Count'] = value
                                         df_rows_get.append(row_copy)
                                     continue
                                 if req is 'SET':
-                                    for key, value in mt_dict['SET_Histogram_Percentage'].items():
+                                    for key, value in mt_dict['SET_Histogram_Count'].items():
                                         row_copy = single_row.copy()
                                         row_copy['Bucket'] = key
-                                        row_copy['Percentage'] = value
-                                        row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
+                                        row_copy['Count'] = value
                                         df_rows_set.append(row_copy)
                                     continue
 
                                 # We have a multi-type experiment, let's store the numbers in their respective tables
-                                for key, value in mt_dict['GET_Histogram_Percentage'].items():
+                                for key, value in mt_dict['GET_Histogram_Count'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
-                                    row_copy['Percentage'] = value
-                                    row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
+                                    row_copy['Count'] = value
                                     df_rows_get.append(row_copy)
 
-                                for key, value in mt_dict['SET_Histogram_Percentage'].items():
+                                for key, value in mt_dict['SET_Histogram_Count'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
-                                    row_copy['Percentage'] = value
-                                    row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
+                                    row_copy['Count'] = value
                                     df_rows_set.append(row_copy)
 
         self.dataframe_histogram_set = pd.DataFrame(df_rows_set)
@@ -344,35 +340,31 @@ class MiddlewareCollector(DataCollector):
                                               'Seconds': mt_dict['Seconds']}
 
                                 if req is 'GET':
-                                    for key, value in mt_dict['GET_Histogram_Percentage'].items():
+                                    for key, value in mt_dict['GET_Histogram_Count'].items():
                                         row_copy = single_row.copy()
                                         row_copy['Bucket'] = key
-                                        row_copy['Percentage'] = value
-                                        row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
+                                        row_copy['Count'] = value
                                         df_rows_get.append(row_copy)
                                     continue
                                 if req is 'SET':
-                                    for key, value in mt_dict['SET_Histogram_Percentage'].items():
+                                    for key, value in mt_dict['SET_Histogram_Count'].items():
                                         row_copy = single_row.copy()
                                         row_copy['Bucket'] = key
-                                        row_copy['Percentage'] = value
-                                        row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
+                                        row_copy['Count'] = value
                                         df_rows_set.append(row_copy)
                                     continue
 
                                 # We have a multi-type experiment, let's store the numbers in their respective tables
-                                for key, value in mt_dict['GET_Histogram_Percentage'].items():
+                                for key, value in mt_dict['GET_Histogram_Count'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
-                                    row_copy['Percentage'] = value
-                                    row_copy['Count'] = mt_dict['GET_Histogram_Count'][key]
+                                    row_copy['Count'] = value
                                     df_rows_get.append(row_copy)
 
-                                for key, value in mt_dict['SET_Histogram_Percentage'].items():
+                                for key, value in mt_dict['SET_Histogram_Count'].items():
                                     row_copy = single_row.copy()
                                     row_copy['Bucket'] = key
-                                    row_copy['Percentage'] = value
-                                    row_copy['Count'] = mt_dict['SET_Histogram_Count'][key]
+                                    row_copy['Count'] = value
                                     df_rows_set.append(row_copy)
 
         self.dataframe_histogram_set = pd.DataFrame(df_rows_set)

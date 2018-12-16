@@ -73,8 +73,8 @@
 % \titlespacing{\subsection}{0pt}{2ex plus 0.5ex minus 0.5ex}{0ex plus 0.5ex}
 % \titlespacing{\subsubsection}{0pt}{2ex plus 0.5ex minus 0.5ex}{0ex plus 0.5ex}
 % \titlespacing{\subsubsubsection}{0pt}{2ex plus 0.5ex minus 0.5ex}{0ex plus 0.5ex}
-% \setlength{\parskip}{1mm}
-% \setlength{\parsep}{0pt}
+\setlength{\parskip}{1mm}
+\setlength{\parsep}{0pt}
 
 % Penalties for widows/orphans (lines at top/bottom of page ending/starting)
 \widowpenalty = 500 % default: 150
@@ -86,6 +86,18 @@
 %\emergencystretch=10pt
 \lefthyphenmin = 4
 \righthyphenmin = 4
+
+% Compressing various nice visible things
+\renewcommand\floatpagefraction{.9}
+\renewcommand\dblfloatpagefraction{.9} % for two column documents
+\renewcommand\topfraction{.9}
+\renewcommand\dbltopfraction{.9} % for two column documents
+\renewcommand\bottomfraction{.9}
+\renewcommand\textfraction{.1}   
+\setcounter{totalnumber}{50}
+\setcounter{topnumber}{50}
+\setcounter{bottomnumber}{50}
+
 
 % Start a new odd page
 \newcommand{\cleartooddpage}{
