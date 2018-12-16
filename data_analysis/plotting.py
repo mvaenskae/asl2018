@@ -53,6 +53,33 @@ class PlottingFunctions:
             ExperimentPlotter.save_figure(save_as_filename)
 
     @staticmethod
+    def barplot(dataframe, experiment_title, save_as_filename,
+                x=None, y=None, hue=None, ci='sd',
+                xlabel=None, ylabel=None, huelabel=None,
+                xlim=(None, None), ylim=(0, None),
+                xticks=None):
+        sns.barplot(x, y, hue, data=dataframe,
+                    ci=ci, capsize=.1, errwidth=1.5).set(xlabel=xlabel, ylabel=ylabel, title=experiment_title,
+                                           xlim=xlim, ylim=ylim)
+
+        if isinstance(xticks, tuple):
+            plt.xticks(xticks[0], xticks[1], rotation=45)
+        else:
+            plt.xticks(xticks, rotation=45)
+
+        if huelabel is not None:
+            legend = plt.legend()
+            for txt in legend.get_texts():
+                if txt.get_text() is hue and huelabel is not None:
+                    txt.set_text(huelabel)
+                    continue
+
+        if save_as_filename is None:
+            plt.show()
+        else:
+            ExperimentPlotter.save_figure(save_as_filename)
+
+    @staticmethod
     def distplot(histogram, experiment_title, save_as_filename,
                  bins=200, kde=False,
                  xlabel=None, ylabel=None, xlim=(0, None), ylim=(0, None),
@@ -181,6 +208,11 @@ class StatisticsFunctions:
                                     .675, .7, .725, .75, .775, .8, .825, .85, .875, .90, .925, .95, .975, .99, 1])).reset_index().rename(
             index=str,
             columns={"level_2": 'Percentile'})
+
+    @staticmethod
+    def get_report_percentiles(dataframe):
+        return dataframe.quantile(([.25, .5, .75, .90, .99])).reset_index().rename(index=str,
+                                                                                   columns={"level_2": 'Percentile'})
 
     @staticmethod
     def mm1(summary_table, plot=False):
@@ -999,6 +1031,19 @@ class ExperimentPlotter:
                                        xlabel='Percentile', ylabel='Response Time (ms)', huelabel='MultiGET Type',
                                        xlim=(0, 1), ylim=(0, 20),
                                        xticks=[.25, .5, .75, .9, .99])
+
+            quantile_data_per_type_and_repetition = []
+            for item in raw_hits_dataframe:
+                quantile = StatisticsFunctions.get_report_percentiles(
+                    item.groupby(['Request_Type', 'Repetition'])['Response_Time'])
+                quantile_data_per_type_and_repetition.append(quantile)
+
+            percentiles = pd.concat(quantile_data_per_type_and_repetition)
+
+            PlottingFunctions.barplot(percentiles, exp_name, plot_base + "percentiles_bar", x='Percentile',
+                                      y='Response_Time', hue='Request_Type', xlabel='Percentile',
+                                      ylabel='Response Time (ms)', huelabel='MultiGET Type', ylim=(0, 20))
+
 
         print(exp_name + " GET Percentiles:")
         print(StatisticsFunctions.get_average_and_std(percentiles.groupby(['Request_Type', 'Percentile']),
