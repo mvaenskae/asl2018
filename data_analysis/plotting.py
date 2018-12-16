@@ -810,6 +810,16 @@ class ExperimentPlotter:
         get_group = flattened[1][~flattened[1].Type.str.contains('Interactive')]
         get_group['Type'] = get_group['Type'].replace(type_to_number_dict, regex=True)
         pd.to_numeric(get_group['Type'])
+        server_load = get_group['Key_Distribution'].apply(pd.Series).apply(pd.Series)
+        server_load.rename(columns={0: 'Server1', 1: 'Server2', 2: 'Server3'}, inplace=True)
+        server_load.fillna(value=0, inplace=True)
+        get_group = get_group.join(server_load)
+        get_group.drop(columns=['Key_Distribution'], inplace=True)
+        names = get_group.columns.tolist()
+        names.remove('Server1')
+        names.remove('Server2')
+        names.remove('Server3')
+        get_copy = get_group
         get_group = get_group.groupby(['Type', 'Repetition'])
 
         throughput_get = StatisticsFunctions.get_sum(get_group, 'Request_Throughput')
@@ -821,6 +831,10 @@ class ExperimentPlotter:
         misses_get = StatisticsFunctions.get_sum(get_group, 'Misses')
         keysize_get = StatisticsFunctions.get_weighted_average(get_group, 'Request_Size')
         key_throughput_get = StatisticsFunctions.get_sum(get_group, 'Key_Throughput')
+        server_loads = pd.wide_to_long(get_copy, stubnames='Server', i=names, j='Server_ID')
+        server_loads = server_loads.reset_index()
+        server_loads = server_loads.groupby(['Type', 'Repetition', 'Server_ID'])
+        server_loads_average = StatisticsFunctions.get_weighted_average(server_loads, 'Server')
 
         if plot:
             concatenated_throughput = pd.concat([throughput_get.assign(RequestType='GET')])
@@ -857,6 +871,10 @@ class ExperimentPlotter:
                                        y='Queue_Size',
                                        xlabel=req_types, ylabel='Queue Size',
                                        xlim=(0, None), ylim=(0, None), xticks=[1, 3, 6, 9])
+
+            PlottingFunctions.barplot(server_loads_average, exp_name, plot_base + "key_distribution", x='Server_ID',
+                                      y='Server', hue='Type', xlabel='Server ID',
+                                      ylabel='Average Load', huelabel='MultiGET Type', ylim=(0, 4))
 
         response_time_get = pd.merge(throughput_get, response_time_get)
         queue_waiting_time_get = pd.merge(throughput_get, queue_waiting_time_get)

@@ -141,6 +141,27 @@
         memcached server was subject to as on average this design converges towards a fair estimate of equal load being
         distributed to all participants.
 
+        In figure \ref{fig:load_balancing_proof} load balancing results of later experiments are shown for key sizes
+        above 1 to give empirical proof of the algorithm being fair.
+
+        \begin{figure*}
+            \vspace*{-.5\baselineskip}
+            \makebox[1\linewidth][c]{%
+                \begin{subfigure}[t!]{0.50\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/5-1_key_distribution.png}
+                    \caption{Average key distribution with sharding enabled.\label{fig:51_mw_lb}}
+                \end{subfigure}
+                \begin{subfigure}[t!]{0.50\textwidth}
+                    \centering
+                    \includegraphics[width=\textwidth]{../data_analysis/figures/5-2_key_distribution.png}
+                    \caption{Average key distribution with sharding disabled.\label{fig:52_mw_lb}}
+                \end{subfigure}
+            }
+            \caption{Request distribution in average key sizes per \srv{} measured for Experiment 5.1 and 5.2 with
+                     sharding enabled and disabled.\label{fig:load_balancing_proof}}
+        \end{figure*}
+
 
     \subsection{Experimental Configurations\label{subsec:1_exp-conf}}
         In this report the following notations exist: \cli, \mw{} and \srv{} which refer

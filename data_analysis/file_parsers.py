@@ -450,7 +450,9 @@ class MiddlewareParser(Parser):
 
     @staticmethod
     def dictionary_keywise_add(dict1, dict2):
-        result = {key: dict1.get(key) + dict2.get(key) for key in set(dict1) if dict1.get(key) is not None}
+        result = {key: dict1.get(key) + dict2.get(key) for key in set(dict1) if dict1.get(key) is not None and key != 'Key_Distribution'}
+        if 'Key_Distribution' in dict1.keys():
+            result['Key_Distribution'] = tuple(x + y for x, y in zip(dict1.get('Key_Distribution'), dict2.get('Key_Distribution')))
         for key in set(dict1):
             if dict1.get(key) is None:
                 result[key] = None
@@ -539,6 +541,8 @@ class MiddlewareParser(Parser):
                 for i in ['Request_Size', 'Queue_Waiting_Time', 'Memcached_Communication', 'Response_Time']:
                     if i in self.get_observed:
                         self.get_observed[i] = self.get_observed[i] * multiplier
+                if 'Key_Distribution' in self.get_observed.keys() and self.get_observed['Key_Distribution'] is not None:
+                    self.get_observed['Key_Distribution'] = tuple(StdLib.get_sane_double(x) * multiplier for x in self.get_observed['Key_Distribution'])
                 self.get_interactive['Response_Time'] = self.get_interactive['Response_Time'] * multiplier
         if entry == 'SET':
             if self.set_observed['Request_Throughput'] is not None:
